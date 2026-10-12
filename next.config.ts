@@ -14,7 +14,14 @@ const nextConfig: NextConfig = {
   // The embedded dev database is never bundled.
   serverExternalPackages: ["@electric-sql/pglite"],
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      // Everything except the embeddable menu may only be framed by ourselves.
+      { source: "/((?!embed/).*)", headers: securityHeaders },
+      {
+        source: "/embed/:path*",
+        headers: [...securityHeaders.filter((h) => h.key !== "X-Frame-Options"), { key: "Content-Security-Policy", value: "frame-ancestors *" }],
+      },
+    ];
   },
   turbopack: {
     rules: {

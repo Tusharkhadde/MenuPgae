@@ -33,6 +33,9 @@ const schema = z.object({
   VERCEL_TEAM_ID: optional,
   PRO_EMAILS: optional,
   CUSTOM_DOMAIN_TARGET: optional,
+  GEMINI_API_KEY: optional,
+  GEMINI_MODEL: optional,
+  CRON_SECRET: optional,
 });
 
 export type Env = z.infer<typeof schema>;
@@ -79,6 +82,10 @@ export const features = {
     return !!(e.R2_ACCOUNT_ID && e.R2_ACCESS_KEY_ID && e.R2_SECRET_ACCESS_KEY && e.R2_BUCKET && e.R2_PUBLIC_URL);
   },
   vercelDomains: () => !!(env().VERCEL_API_TOKEN && env().VERCEL_PROJECT_ID),
+  /** Transactional email (reservation alerts, team invites, weekly digest). Sign-in links use the same key. */
+  resend: () => !!env().AUTH_RESEND_KEY,
+  /** Optional AI helpers (auto-translate, menu photo import). */
+  gemini: () => !!env().GEMINI_API_KEY,
 };
 
 export function proEmailAllowlist(): Set<string> {

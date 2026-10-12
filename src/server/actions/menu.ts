@@ -6,8 +6,9 @@ import { getDb } from "@/lib/db";
 import { categories, items } from "@/lib/db/schema";
 import { categorySchema, itemSchema, reorderSchema } from "@/lib/validation";
 import { parsePriceToMinor } from "@/lib/money";
+import { hasOptions } from "@/lib/options";
 import { assertCanAddCategory, assertCanAddItems } from "@/lib/limits";
-import { getPlanForUser, requireOwnedRestaurantOrThrow } from "@/server/session";
+import { getPlanForUser, requireRestaurantAccessOrThrow } from "@/server/session";
 import { revalidateRestaurant } from "@/server/revalidate";
 import { insertSampleMenu } from "@/server/sample-insert";
 import { SAMPLE_MENU } from "@/server/sample-menu";
@@ -21,13 +22,13 @@ function done(r: Restaurant) {
 
 export async function upsertCategory(restaurantId: string, input: unknown): Promise<ActionResult<{ id: string }>> {
   return run(async () => {
-    const { user, restaurant } = await requireOwnedRestaurantOrThrow(restaurantId);
+    const { restaurant } = await requireRestaurantAccessOrThrow(restaurantId, "manager");
     const data = categorySchema.parse(input);
     const db = await getDb();
     if (data.id) {
       const res = await db
         .update(categories)
-        .set({ name: data.name, description: data.description })
+        .set({ name: data.name, description: data.description, availability: data.availability })
         .where(and(eq(categories.id, data.id), eq(categories.restaurantId, restaurant.id)))
         .returning({ id: categories.id });
       if (!res.length) throw new UserError("Category not found.");
@@ -35,11 +36,11 @@ export async function upsertCategory(restaurantId: string, input: unknown): Prom
       return { id: data.id };
     }
     const [{ n }] = await db.select({ n: count() }).from(categories).where(eq(categories.restaurantId, restaurant.id));
-    assertCanAddCategory(await getPlanForUser(user.id), n);
+    assertCanAddCategory(await getPlanForUser(restaurant.ownerId), n);
     const [{ pos }] = await db.select({ pos: max(categories.position) }).from(categories).where(eq(categories.restaurantId, restaurant.id));
     const [row] = await db
       .insert(categories)
-      .values({ restaurantId: restaurant.id, name: data.name, description: data.description, position: (pos ?? -1) + 1 })
+      .values({ restaurantId: restaurant.id, name: data.name, description: data.description, availability: data.availability, position: (pos ?? -1) + 1 })
       .returning({ id: categories.id });
     done(restaurant);
     return { id: row.id };
@@ -48,7 +49,7 @@ export async function upsertCategory(restaurantId: string, input: unknown): Prom
 
 export async function deleteCategory(restaurantId: string, categoryId: string): Promise<ActionResult> {
   return run(async () => {
-    const { restaurant } = await requireOwnedRestaurantOrThrow(restaurantId);
+    const { restaurant } = await requireRestaurantAccessOrThrow(restaurantId, "manager");
     const db = await getDb();
     await db.delete(categories).where(and(eq(categories.id, categoryId), eq(categories.restaurantId, restaurant.id)));
     done(restaurant);
@@ -58,7 +59,7 @@ export async function deleteCategory(restaurantId: string, categoryId: string): 
 
 export async function reorderCategories(restaurantId: string, input: unknown): Promise<ActionResult> {
   return run(async () => {
-    const { restaurant } = await requireOwnedRestaurantOrThrow(restaurantId);
+    const { restaurant } = await requireRestaurantAccessOrThrow(restaurantId, "manager");
     const { ids } = reorderSchema.parse(input);
     const db = await getDb();
     await db.transaction(async (tx) => {
@@ -73,7 +74,7 @@ export async function reorderCategories(restaurantId: string, input: unknown): P
 
 export async function upsertItem(restaurantId: string, input: unknown): Promise<ActionResult<{ id: string }>> {
   return run(async () => {
-    const { user, restaurant } = await requireOwnedRestaurantOrThrow(restaurantId);
+    const { restaurant } = await requireRestaurantAccessOrThrow(restaurantId, "manager");
     const data = itemSchema.parse(input);
     const priceMinor = parsePriceToMinor(data.price, restaurant.currency);
     if (priceMinor === null) throw new UserError("Enter a valid price, e.g. 149 or 149.50");
@@ -96,6 +97,12 @@ export async function upsertItem(restaurantId: string, input: unknown): Promise<
       allergens: data.allergens,
       bestseller: data.bestseller,
       soldOut: data.soldOut,
+      options: hasOptions(data.options) ? data.options : null,
+      special: data.special,
+      happyHour: data.happyHour,
+      availability: data.availability,
+      calories: data.calories,
+      nutrition: data.nutrition,
     };
 
     if (data.id) {
@@ -110,7 +117,7 @@ export async function upsertItem(restaurantId: string, input: unknown): Promise<
     }
 
     const [{ n }] = await db.select({ n: count() }).from(items).where(eq(items.restaurantId, restaurant.id));
-    assertCanAddItems(await getPlanForUser(user.id), n);
+    assertCanAddItems(await getPlanForUser(restaurant.ownerId), n);
     const [{ pos }] = await db.select({ pos: max(items.position) }).from(items).where(eq(items.categoryId, cat.id));
     const [row] = await db
       .insert(items)
@@ -124,12 +131,12 @@ export async function upsertItem(restaurantId: string, input: unknown): Promise<
 export async function setItemFlag(
   restaurantId: string,
   itemId: string,
-  flag: "soldOut" | "bestseller",
+  flag: "soldOut" | "bestseller" | "special",
   value: boolean,
 ): Promise<ActionResult> {
   return run(async () => {
-    const { restaurant } = await requireOwnedRestaurantOrThrow(restaurantId);
-    if (flag !== "soldOut" && flag !== "bestseller") throw new UserError("Unknown flag.");
+    const { restaurant } = await requireRestaurantAccessOrThrow(restaurantId, "manager");
+    if (flag !== "soldOut" && flag !== "bestseller" && flag !== "special") throw new UserError("Unknown flag.");
     const db = await getDb();
     await db
       .update(items)
@@ -142,7 +149,7 @@ export async function setItemFlag(
 
 export async function deleteItem(restaurantId: string, itemId: string): Promise<ActionResult> {
   return run(async () => {
-    const { restaurant } = await requireOwnedRestaurantOrThrow(restaurantId);
+    const { restaurant } = await requireRestaurantAccessOrThrow(restaurantId, "manager");
     const db = await getDb();
     await db.delete(items).where(and(eq(items.id, itemId), eq(items.restaurantId, restaurant.id)));
     done(restaurant);
@@ -153,7 +160,7 @@ export async function deleteItem(restaurantId: string, itemId: string): Promise<
 /** Persist item order within a category (and move items into it if dragged across). */
 export async function reorderItems(restaurantId: string, categoryId: string, input: unknown): Promise<ActionResult> {
   return run(async () => {
-    const { restaurant } = await requireOwnedRestaurantOrThrow(restaurantId);
+    const { restaurant } = await requireRestaurantAccessOrThrow(restaurantId, "manager");
     const { ids } = reorderSchema.parse(input);
     const db = await getDb();
     const [cat] = await db
@@ -179,11 +186,11 @@ export async function reorderItems(restaurantId: string, categoryId: string, inp
 
 export async function addSampleMenu(restaurantId: string): Promise<ActionResult> {
   return run(async () => {
-    const { user, restaurant } = await requireOwnedRestaurantOrThrow(restaurantId);
+    const { restaurant } = await requireRestaurantAccessOrThrow(restaurantId, "manager");
     const db = await getDb();
     const [{ n }] = await db.select({ n: count() }).from(items).where(eq(items.restaurantId, restaurant.id));
     if (n > 0) throw new UserError("The sample menu can only be added to an empty menu.");
-    assertCanAddItems(await getPlanForUser(user.id), 0, SAMPLE_MENU.reduce((s, c) => s + c.items.length, 0));
+    assertCanAddItems(await getPlanForUser(restaurant.ownerId), 0, SAMPLE_MENU.reduce((s, c) => s + c.items.length, 0));
     await insertSampleMenu(db, restaurant.id, restaurant.currency);
     done(restaurant);
     return undefined;

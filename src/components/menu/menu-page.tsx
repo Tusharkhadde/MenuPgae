@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MapPinIcon, NavigationIcon, PhoneIcon, StarIcon } from "lucide-react";
+import { MapPinIcon, MegaphoneIcon, NavigationIcon, PhoneIcon, StarIcon } from "lucide-react";
 import type { PublicMenu } from "@/server/public-menu";
 import { DAYS, DAY_LABELS, formatTime, toOpeningHoursSpecification } from "@/lib/hours";
 import { minorDigits } from "@/lib/money";
@@ -8,6 +8,10 @@ import { MenuBrowser, WhatsAppIcon } from "@/components/menu/menu-browser";
 import { OpenStatusBadge } from "@/components/menu/open-status";
 import { TodayHighlighter } from "@/components/menu/today-highlighter";
 import { siteUrl } from "@/lib/site-url";
+import { FeedbackButton, ReserveButton } from "@/components/menu/menu-guest";
+import { normalizeOptions } from "@/lib/options";
+import { upiAvailable } from "@/lib/upi";
+import { RegisterServiceWorker } from "@/components/menu/register-sw";
 
 export function buildJsonLd(menu: PublicMenu, pageUrl: string) {
   const r = menu.restaurant;
@@ -39,6 +43,7 @@ export function buildJsonLd(menu: PublicMenu, pageUrl: string) {
           name: i.name,
           ...(i.description ? { description: i.description } : {}),
           ...(i.imageUrl ? { image: i.imageUrl } : {}),
+          ...(i.calories !== null ? { nutrition: { "@type": "NutritionInformation", calories: `${i.calories} calories` } } : {}),
           ...(i.diet === "vegan"
             ? { suitableForDiet: "https://schema.org/VeganDiet" }
             : i.diet === "veg"
@@ -56,7 +61,7 @@ export function buildJsonLd(menu: PublicMenu, pageUrl: string) {
   };
 }
 
-export function MenuPageView({ menu, pageUrl }: { menu: PublicMenu; pageUrl: string }) {
+export function MenuPageView({ menu, pageUrl, embed = false }: { menu: PublicMenu; pageUrl: string; embed?: boolean }) {
   const r = menu.restaurant;
   const wa = r.whatsapp ? whatsappLink(r.whatsapp) : null;
   const delivery = [
@@ -76,7 +81,13 @@ export function MenuPageView({ menu, pageUrl }: { menu: PublicMenu; pageUrl: str
 
   return (
     <div className="menu-theme min-h-dvh" data-theme={r.theme}>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
+      {!embed && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />}
+      {!embed && <RegisterServiceWorker />}
+      {r.promoBanner && (
+        <div className="flex items-center justify-center gap-2 bg-[var(--m-accent)] px-4 py-2 text-center text-sm font-medium text-[var(--m-accent-text)]">
+          <MegaphoneIcon className="size-4 shrink-0" aria-hidden /> {r.promoBanner}
+        </div>
+      )}
       {menu.isDemo && (
         <div className="bg-[var(--m-text)] px-4 py-2 text-center text-xs text-[var(--m-bg)]">
           This is a sample restaurant made with MenuPage.{" "}
@@ -114,8 +125,9 @@ export function MenuPageView({ menu, pageUrl }: { menu: PublicMenu; pageUrl: str
             {r.tagline && r.cuisine && <span className="text-sm text-[var(--m-muted)]">{r.cuisine}</span>}
           </div>
 
-          {actions.length > 0 && (
+          {(actions.length > 0 || menu.features.reservations) && (
             <div className="no-scrollbar mt-5 flex gap-2 overflow-x-auto pb-1">
+              {menu.features.reservations && <ReserveButton restaurant={{ id: r.id, name: r.name, timezone: r.timezone, whatsapp: r.whatsapp }} />}
               {actions.map((a) => (
                 <a
                   key={a.label}
@@ -155,11 +167,22 @@ export function MenuPageView({ menu, pageUrl }: { menu: PublicMenu; pageUrl: str
               hours: r.hours,
               whatsapp: r.whatsapp,
               whatsappOrdering: r.whatsappOrdering,
+              ordersEnabled: r.ordersEnabled,
+              serviceRequestsEnabled: r.serviceRequestsEnabled,
+              feedbackEnabled: r.feedbackEnabled,
+              reservationsEnabled: menu.features.reservations,
+              googleReviewsUrl: r.googleReviewsUrl,
+              upiId: upiAvailable(r.currency, r.upiId) ? r.upiId : null,
+              happyHour: menu.features.happyHour ? r.happyHour : null,
+              couponsEnabled: menu.features.coupons,
+              languages: menu.features.languages,
             }}
             categories={menu.categories.map((c) => ({
               id: c.id,
               name: c.name,
               description: c.description,
+              availability: c.availability ?? null,
+              translations: c.translations ?? {},
               items: c.items.map((i) => ({
                 id: i.id,
                 name: i.name,
@@ -171,6 +194,13 @@ export function MenuPageView({ menu, pageUrl }: { menu: PublicMenu; pageUrl: str
                 allergens: i.allergens,
                 bestseller: i.bestseller,
                 soldOut: i.soldOut,
+                options: i.options ? normalizeOptions(i.options) : null,
+                special: i.special,
+                happyHour: i.happyHour,
+                availability: i.availability ?? null,
+                calories: i.calories,
+                nutrition: i.nutrition,
+                translations: i.translations ?? {},
               })),
             }))}
           />
@@ -230,6 +260,7 @@ export function MenuPageView({ menu, pageUrl }: { menu: PublicMenu; pageUrl: str
 
         <footer className="mt-12 flex flex-col items-center gap-3 text-center text-xs text-[var(--m-muted)]">
           <p>Prices include applicable taxes unless stated otherwise. Please tell staff about any allergies.</p>
+          {r.feedbackEnabled && !menu.isDemo && <FeedbackButton restaurantId={r.id} />}
           {menu.showBadge && (
             <a href={`${siteUrl()}/?ref=${encodeURIComponent(r.slug)}`} className="inline-flex items-center gap-1.5 rounded-full border border-[var(--m-border)] bg-[var(--m-surface)] px-3 py-1.5 font-medium text-[var(--m-text)]">
               <span className="grid size-4 place-items-center rounded bg-[#ea580c] text-[9px] font-bold text-white">M</span>

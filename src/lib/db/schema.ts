@@ -13,6 +13,10 @@ import {
 } from "drizzle-orm/pg-core";
 import type { AdapterAccountType } from "next-auth/adapters";
 import type { WeeklyHours } from "@/lib/hours";
+import type { ItemOptions } from "@/lib/options";
+import type { Availability, HappyHour } from "@/lib/schedule";
+import type { Translations } from "@/lib/languages";
+import type { OrderLine, OrderStatus } from "@/lib/order";
 
 const id = () =>
   text("id")
@@ -116,6 +120,21 @@ export const restaurants = pgTable(
     uberEatsUrl: text("uber_eats_url"),
     hours: jsonb("hours").$type<WeeklyHours>(),
     customDomain: text("custom_domain"),
+    /** UPI VPA (India) for "pay by UPI" after ordering — no gateway, no fees. */
+    upiId: text("upi_id"),
+    /** One-line promo banner on the public page. */
+    promoBanner: text("promo_banner"),
+    /** Extra menu languages (codes from lib/languages); the main language is implicit. */
+    languages: text("languages").array().notNull().default([]),
+    happyHour: jsonb("happy_hour").$type<HappyHour>(),
+    /** Guests can place orders that land in the dashboard inbox (WhatsApp still opens). */
+    ordersEnabled: boolean("orders_enabled").notNull().default(true),
+    /** Call-waiter / request-bill buttons for guests at a table. */
+    serviceRequestsEnabled: boolean("service_requests_enabled").notNull().default(true),
+    feedbackEnabled: boolean("feedback_enabled").notNull().default(true),
+    reservationsEnabled: boolean("reservations_enabled").notNull().default(false),
+    /** Owner gets the weekly email digest (when RESEND is configured). */
+    digestEnabled: boolean("digest_enabled").notNull().default(true),
     published: boolean("published").notNull().default(true),
     ...timestamps,
   },
@@ -136,6 +155,9 @@ export const categories = pgTable(
     name: text("name").notNull(),
     description: text("description"),
     position: integer("position").notNull().default(0),
+    /** Time-based menus, e.g. Breakfast 08:00–11:30 on weekdays. */
+    availability: jsonb("availability").$type<Availability>(),
+    translations: jsonb("translations").$type<Translations>().notNull().default({}),
     ...timestamps,
   },
   (t) => [index("categories_restaurant_idx").on(t.restaurantId, t.position)],
@@ -162,6 +184,17 @@ export const items = pgTable(
     allergens: text("allergens").array().notNull().default([]),
     bestseller: boolean("bestseller").notNull().default(false),
     soldOut: boolean("sold_out").notNull().default(false),
+    /** Sizes (Half/Full) and add-on groups. */
+    options: jsonb("options").$type<ItemOptions>(),
+    /** "Today's special" — pinned to the top of the menu. */
+    special: boolean("special").notNull().default(false),
+    /** Gets the restaurant's happy-hour discount during the happy-hour window. */
+    happyHour: boolean("happy_hour").notNull().default(false),
+    availability: jsonb("availability").$type<Availability>(),
+    calories: integer("calories"),
+    /** Free text, e.g. "Protein 12g · Carbs 40g · Fat 9g". */
+    nutrition: text("nutrition"),
+    translations: jsonb("translations").$type<Translations>().notNull().default({}),
     position: integer("position").notNull().default(0),
     ...timestamps,
   },
@@ -216,8 +249,142 @@ export const events = pgTable(
   (t) => [index("events_restaurant_day_idx").on(t.restaurantId, t.day, t.type)],
 );
 
+/* ----------------------------------------------------------------------------
+ * Orders, table service, feedback, reservations, coupons, team
+ * ------------------------------------------------------------------------- */
+
+export const orders = pgTable(
+  "orders",
+  {
+    id: id(),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    /** Restaurant-local business day and a per-day running number (#1, #2 …). */
+    day: date("day", { mode: "string" }).notNull(),
+    number: integer("number").notNull(),
+    /** Short code the guest also sees in their WhatsApp message (matches chat ↔ inbox). */
+    ref: text("ref"),
+    table: text("table_label"),
+    customerName: text("customer_name"),
+    customerPhone: text("customer_phone"),
+    note: text("note"),
+    lines: jsonb("lines").$type<OrderLine[]>().notNull(),
+    currency: text("currency").notNull(),
+    subtotalMinor: integer("subtotal_minor").notNull(),
+    discountMinor: integer("discount_minor").notNull().default(0),
+    totalMinor: integer("total_minor").notNull(),
+    couponCode: text("coupon_code"),
+    status: text("status").$type<OrderStatus>().notNull().default("new"),
+    paid: boolean("paid").notNull().default(false),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("orders_restaurant_day_number_idx").on(t.restaurantId, t.day, t.number),
+    index("orders_restaurant_created_idx").on(t.restaurantId, t.createdAt),
+  ],
+);
+
+export type ServiceKind = "waiter" | "bill";
+
+export const serviceRequests = pgTable(
+  "service_requests",
+  {
+    id: id(),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    table: text("table_label").notNull(),
+    kind: text("kind").$type<ServiceKind>().notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("service_requests_restaurant_idx").on(t.restaurantId, t.createdAt)],
+);
+
+export const feedback = pgTable(
+  "feedback",
+  {
+    id: id(),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    orderId: text("order_id").references(() => orders.id, { onDelete: "set null" }),
+    rating: integer("rating").notNull(),
+    comment: text("comment"),
+    name: text("name"),
+    contact: text("contact"),
+    table: text("table_label"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("feedback_restaurant_idx").on(t.restaurantId, t.createdAt)],
+);
+
+export type ReservationStatus = "pending" | "accepted" | "declined";
+
+export const reservations = pgTable(
+  "reservations",
+  {
+    id: id(),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    phone: text("phone").notNull(),
+    email: text("email"),
+    date: date("date", { mode: "string" }).notNull(),
+    time: text("time").notNull(),
+    partySize: integer("party_size").notNull(),
+    note: text("note"),
+    status: text("status").$type<ReservationStatus>().notNull().default("pending"),
+    ...timestamps,
+  },
+  (t) => [index("reservations_restaurant_date_idx").on(t.restaurantId, t.date)],
+);
+
+export const coupons = pgTable(
+  "coupons",
+  {
+    id: id(),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    kind: text("kind").$type<"percent" | "amount">().notNull(),
+    value: integer("value").notNull(),
+    minOrderMinor: integer("min_order_minor").notNull().default(0),
+    active: boolean("active").notNull().default(true),
+    expiresAt: date("expires_at", { mode: "string" }),
+    maxUses: integer("max_uses"),
+    uses: integer("uses").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("coupons_restaurant_code_idx").on(t.restaurantId, t.code)],
+);
+
+export type TeamRole = "manager" | "staff";
+
+/** Staff invited to a restaurant by email. They sign in with that email. */
+export const teamMembers = pgTable(
+  "team_members",
+  {
+    id: id(),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    role: text("role").$type<TeamRole>().notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("team_members_restaurant_email_idx").on(t.restaurantId, t.email), index("team_members_email_idx").on(t.email)],
+);
+
 export type User = typeof users.$inferSelect;
 export type Restaurant = typeof restaurants.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type Item = typeof items.$inferSelect;
 export type BillingAccount = typeof billingAccounts.$inferSelect;
+export type Order = typeof orders.$inferSelect;
+export type Reservation = typeof reservations.$inferSelect;
+export type Coupon = typeof coupons.$inferSelect;
+export type TeamMember = typeof teamMembers.$inferSelect;

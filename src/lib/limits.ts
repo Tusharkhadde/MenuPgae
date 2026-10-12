@@ -72,3 +72,45 @@ export function analyticsSince(plan: PlanId, now = new Date()): string {
 export function showBadge(plan: PlanId): boolean {
   return !limitsFor(plan).removeBadge;
 }
+
+type BooleanFeature = { [K in keyof PlanLimits]: PlanLimits[K] extends boolean ? K : never }[keyof PlanLimits];
+
+const FEATURE_MESSAGES: Record<BooleanFeature, string> = {
+  customDomain: "Custom domains are a Pro feature.",
+  removeBadge: "Removing the MenuPage badge is a Pro feature.",
+  kitchenDisplay: "The kitchen display is a Pro feature.",
+  coupons: "Coupon codes are a Pro feature.",
+  happyHour: "Happy-hour pricing is a Pro feature.",
+  reservations: "Table reservations are a Pro feature.",
+  weeklyDigest: "The weekly digest is a Pro feature.",
+  aiTools: "AI tools are a Pro feature.",
+};
+
+export function hasFeature(plan: PlanId, feature: BooleanFeature): boolean {
+  return limitsFor(plan)[feature];
+}
+
+export function assertFeature(plan: PlanId, feature: BooleanFeature) {
+  if (!hasFeature(plan, feature)) throw new LimitError(FEATURE_MESSAGES[feature], feature);
+}
+
+export function assertLanguages(plan: PlanId, count: number) {
+  const max = limitsFor(plan).extraLanguages;
+  if (count > max) {
+    throw new LimitError(
+      `Your ${PLANS[plan].name} plan includes ${max} extra language${max === 1 ? "" : "s"}.` + (plan === "free" ? " Upgrade to Pro for up to " + PLANS.pro.limits.extraLanguages + "." : ""),
+      "extraLanguages",
+    );
+  }
+}
+
+export function assertTeamSize(plan: PlanId, count: number) {
+  if (count > limitsFor(plan).teamMembers) {
+    throw new LimitError(plan === "free" ? "Team members are a Pro feature." : `Your plan allows up to ${limitsFor(plan).teamMembers} team members.`, "teamMembers");
+  }
+}
+
+/** Order-history window start for a plan. */
+export function ordersSince(plan: PlanId, now = new Date()): Date {
+  return new Date(now.getTime() - limitsFor(plan).orderHistoryDays * 86_400_000);
+}

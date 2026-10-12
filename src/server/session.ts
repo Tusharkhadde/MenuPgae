@@ -4,10 +4,12 @@ import { redirect, notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
-import { billingAccounts, restaurants, users, type Restaurant } from "@/lib/db/schema";
+import { billingAccounts, restaurants, teamMembers, users, type Restaurant } from "@/lib/db/schema";
 import { EMPTY_BILLING_STATE, entitledPlan, type BillingState, type SubscriptionStatus } from "@/lib/billing/state";
 import type { PlanId } from "@/config/plans";
 import { proEmailAllowlist } from "@/lib/env";
+import { roleAtLeast, type AccessRole } from "@/lib/roles";
+import { limitsFor } from "@/lib/limits";
 
 export type SessionUser = { id: string; isDemo: boolean; name?: string | null; email?: string | null; image?: string | null };
 
@@ -95,4 +97,67 @@ export async function getPlanForUser(userId: string): Promise<PlanId> {
   if (!u || u.isDemo) return "free";
   if (u.email && proEmailAllowlist().has(u.email.toLowerCase())) return "pro";
   return entitledPlan(await getBillingState(userId));
+}
+
+/* ----------------------------------------------------------------------------
+ * Team access: owner > manager > staff.
+ *  - manager: menu, orders, reservations, feedback, QR codes, analytics
+ *  - staff:   orders inbox, kitchen display, table requests only
+ * Team access is paused (not deleted) when the owner's plan no longer includes team members.
+ * ------------------------------------------------------------------------- */
+
+export async function findAccessibleRestaurant(
+  user: Pick<SessionUser, "id" | "email">,
+  restaurantId: string,
+): Promise<{ restaurant: Restaurant; role: AccessRole } | null> {
+  const db = await getDb();
+  const [row] = await db.select().from(restaurants).where(eq(restaurants.id, restaurantId)).limit(1);
+  if (!row) return null;
+  if (row.ownerId === user.id) return { restaurant: row, role: "owner" };
+  const email = user.email?.trim().toLowerCase();
+  if (!email) return null;
+  const [member] = await db
+    .select({ role: teamMembers.role })
+    .from(teamMembers)
+    .where(and(eq(teamMembers.restaurantId, row.id), eq(teamMembers.email, email)))
+    .limit(1);
+  if (!member) return null;
+  if (limitsFor(await getPlanForUser(row.ownerId)).teamMembers <= 0) return null;
+  return { restaurant: row, role: member.role === "manager" ? "manager" : "staff" };
+}
+
+/** For pages: 404 unless the user has at least `min` access. */
+export async function requireRestaurantAccess(restaurantId: string, min: AccessRole) {
+  const user = await requireUser();
+  const found = await findAccessibleRestaurant(user, restaurantId);
+  if (!found || !roleAtLeast(found.role, min)) notFound();
+  return { user, ...found };
+}
+
+export async function requireRestaurantAccessOrThrow(restaurantId: string, min: AccessRole) {
+  const user = await requireUserOrThrow();
+  const found = await findAccessibleRestaurant(user, restaurantId);
+  if (!found || !roleAtLeast(found.role, min)) throw new AuthError("Restaurant not found.");
+  return { user, ...found };
+}
+
+/** Restaurants the user can open: owned first, then ones they were invited to. */
+export async function listAccessibleRestaurants(user: Pick<SessionUser, "id" | "email">) {
+  const db = await getDb();
+  const owned = await db.select().from(restaurants).where(eq(restaurants.ownerId, user.id)).orderBy(restaurants.createdAt);
+  const email = user.email?.trim().toLowerCase();
+  const shared: { restaurant: Restaurant; role: AccessRole }[] = [];
+  if (email) {
+    const rows = await db
+      .select({ restaurant: restaurants, role: teamMembers.role })
+      .from(teamMembers)
+      .innerJoin(restaurants, eq(restaurants.id, teamMembers.restaurantId))
+      .where(eq(teamMembers.email, email));
+    for (const r of rows) {
+      if (r.restaurant.ownerId === user.id) continue;
+      if (limitsFor(await getPlanForUser(r.restaurant.ownerId)).teamMembers <= 0) continue;
+      shared.push({ restaurant: r.restaurant, role: r.role === "manager" ? "manager" : "staff" });
+    }
+  }
+  return { owned, shared };
 }
