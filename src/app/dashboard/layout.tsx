@@ -1,0 +1,53 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { asc, eq } from "drizzle-orm";
+import { requireUser, getPlanForUser } from "@/server/session";
+import { getDb } from "@/lib/db";
+import { restaurants } from "@/lib/db/schema";
+import { Logo } from "@/components/brand/logo";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { UserMenu } from "@/components/dashboard/user-menu";
+import { Badge } from "@/components/ui/badge";
+
+export const metadata: Metadata = { title: "Dashboard", robots: { index: false } };
+
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const user = await requireUser();
+  const db = await getDb();
+  const [list, plan] = await Promise.all([
+    db.select({ id: restaurants.id, name: restaurants.name }).from(restaurants).where(eq(restaurants.ownerId, user.id)).orderBy(asc(restaurants.createdAt)),
+    getPlanForUser(user.id),
+  ]);
+
+  return (
+    <div className="flex min-h-dvh flex-col bg-muted/30">
+      {user.isDemo && (
+        <div className="no-print bg-foreground px-4 py-2 text-center text-xs text-background">
+          You&apos;re in a demo sandbox — edit anything. It&apos;s deleted after 24 hours.{" "}
+          <Link href="/login?intent=signup" className="font-semibold underline underline-offset-2">Create a real account</Link>
+        </div>
+      )}
+      <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
+          <div className="flex items-center gap-3">
+            <Logo href="/dashboard" />
+            <Badge variant={plan === "pro" ? "default" : "secondary"} className="hidden sm:inline-flex">
+              {plan === "pro" ? "Pro" : "Free"}
+            </Badge>
+          </div>
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            <UserMenu
+              name={user.name ?? "Owner"}
+              email={user.email ?? ""}
+              image={user.image ?? null}
+              restaurants={list}
+              isDemo={user.isDemo}
+            />
+          </div>
+        </div>
+      </header>
+      <div className="flex-1">{children}</div>
+    </div>
+  );
+}

@@ -1,0 +1,91 @@
+import "server-only";
+import { z } from "zod";
+
+/**
+ * Environment access. Validation is lazy (on first use at runtime) so that
+ * `next build` works without any secrets.
+ */
+
+const optional = z
+  .string()
+  .trim()
+  .optional()
+  .transform((v) => (v ? v : undefined));
+
+const schema = z.object({
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  DATABASE_URL: optional,
+  AUTH_SECRET: optional,
+  APP_URL: optional,
+  AUTH_URL: optional,
+  AUTH_GOOGLE_ID: optional,
+  AUTH_GOOGLE_SECRET: optional,
+  AUTH_RESEND_KEY: optional,
+  EMAIL_FROM: optional,
+  DEMO_LOGIN_ENABLED: optional,
+  R2_ACCOUNT_ID: optional,
+  R2_ACCESS_KEY_ID: optional,
+  R2_SECRET_ACCESS_KEY: optional,
+  R2_BUCKET: optional,
+  R2_PUBLIC_URL: optional,
+  VERCEL_API_TOKEN: optional,
+  VERCEL_PROJECT_ID: optional,
+  VERCEL_TEAM_ID: optional,
+  PRO_EMAILS: optional,
+  CUSTOM_DOMAIN_TARGET: optional,
+});
+
+export type Env = z.infer<typeof schema>;
+
+let cached: Env | null = null;
+
+export function env(): Env {
+  if (cached) return cached;
+  const parsed = schema.safeParse(process.env);
+  if (!parsed.success) {
+    throw new Error(`Invalid environment variables: ${parsed.error.issues.map((i) => i.path.join(".")).join(", ")}`);
+  }
+  cached = parsed.data;
+  return cached;
+}
+
+export const isProd = () => process.env.NODE_ENV === "production";
+
+/** Throw a clear error at runtime when a production deployment is missing a must-have. */
+export function requireEnv<K extends keyof Env>(key: K, why: string): NonNullable<Env[K]> {
+  const v = env()[key];
+  if (!v) throw new Error(`Missing environment variable ${String(key)} (${why}). See .env.example and README.`);
+  return v as NonNullable<Env[K]>;
+}
+
+export function appUrl(): string {
+  const e = env();
+  const url =
+    e.APP_URL ??
+    e.AUTH_URL ??
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : undefined) ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) ??
+    "http://localhost:3000";
+  return url.replace(/\/+$/, "");
+}
+
+export const features = {
+  google: () => !!(env().AUTH_GOOGLE_ID && env().AUTH_GOOGLE_SECRET),
+  /** Magic links work via Resend, or in development by printing the link to the server console. */
+  email: () => !!env().AUTH_RESEND_KEY || !isProd(),
+  demo: () => (env().DEMO_LOGIN_ENABLED ?? "true") !== "false",
+  r2: () => {
+    const e = env();
+    return !!(e.R2_ACCOUNT_ID && e.R2_ACCESS_KEY_ID && e.R2_SECRET_ACCESS_KEY && e.R2_BUCKET && e.R2_PUBLIC_URL);
+  },
+  vercelDomains: () => !!(env().VERCEL_API_TOKEN && env().VERCEL_PROJECT_ID),
+};
+
+export function proEmailAllowlist(): Set<string> {
+  return new Set(
+    (env().PRO_EMAILS ?? "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
