@@ -1,4 +1,4 @@
-import { requireOwnedRestaurant, getPlanForUser } from "@/server/session";
+import { requireRestaurantAccess, getPlanForUser } from "@/server/session";
 import { parseTables, qrSvg, qrTargetUrl } from "@/lib/qr";
 import { appUrl } from "@/lib/env";
 import { limitsFor } from "@/lib/limits";
@@ -9,8 +9,8 @@ export const metadata = { title: "Print table tents" };
 export default async function PrintTentsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tables?: string }> }) {
   const { id } = await params;
   const { tables: tablesParam } = await searchParams;
-  const { user, restaurant } = await requireOwnedRestaurant(id);
-  const plan = await getPlanForUser(user.id);
+  const { restaurant } = await requireRestaurantAccess(id, "manager");
+  const plan = await getPlanForUser(restaurant.ownerId);
   const tables = parseTables(tablesParam ?? "1-10", limitsFor(plan).tableQrCodes);
   const base = appUrl();
   const codes = await Promise.all(tables.map(async (t) => ({ table: t, svg: await qrSvg(qrTargetUrl(base, restaurant.slug, t)) })));

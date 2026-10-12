@@ -36,7 +36,7 @@ export function UserMenu(props: {
         <DropdownMenuSeparator />
         {props.restaurants.map((r) => (
           <DropdownMenuItem key={r.id} asChild>
-            <Link href={`/dashboard/r/${r.id}/menu`}>
+            <Link href={`/dashboard/r/${r.id}`}>
               <StoreIcon /> <span className="truncate">{r.name}</span>
             </Link>
           </DropdownMenuItem>

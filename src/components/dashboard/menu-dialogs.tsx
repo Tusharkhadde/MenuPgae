@@ -15,12 +15,56 @@ import { ImageUpload } from "@/components/dashboard/image-upload";
 import { DietDot } from "@/components/menu/diet-dot";
 import { upsertCategory, upsertItem } from "@/server/actions/menu";
 import { ALLERGENS, DIETS } from "@/lib/validation";
-import { minorToInput } from "@/lib/money";
+import { minorToInput, parsePriceToMinor } from "@/lib/money";
+import type { ItemOptions } from "@/lib/options";
+import type { Availability } from "@/lib/schedule";
+import { AvailabilityEditor, OptionsEditor, type DraftAvailability, type DraftOptions } from "@/components/dashboard/menu-options-editor";
 import type { EditorCategory, EditorItem } from "@/components/dashboard/menu-editor";
 import type { Diet } from "@/lib/db/schema";
 import { cn } from "@/lib/utils";
 
 const DIET_TEXT: Record<Diet, string> = { veg: "Veg", nonveg: "Non-veg", vegan: "Vegan", egg: "Egg" };
+
+function toDraftAvailability(a: Availability | null | undefined): DraftAvailability {
+  return { days: a?.days ?? [], timed: !!(a?.from && a?.to), from: a?.from ?? "08:00", to: a?.to ?? "11:30" };
+}
+
+function fromDraftAvailability(d: DraftAvailability, enabled: boolean): Availability | null {
+  if (!enabled) return null;
+  const days = d.days.length && d.days.length < 7 ? d.days : undefined;
+  if (!days && !d.timed) return null;
+  return { ...(days ? { days } : {}), ...(d.timed ? { from: d.from, to: d.to } : {}) };
+}
+
+function toDraftOptions(o: ItemOptions | null | undefined, currency: string): DraftOptions {
+  return {
+    variants: (o?.variants ?? []).map((v) => ({ id: v.id, name: v.name, price: minorToInput(v.priceMinor, currency) })),
+    groups: (o?.groups ?? []).map((g) => ({ ...g, options: g.options.map((x) => ({ id: x.id, name: x.name, price: x.priceMinor ? minorToInput(x.priceMinor, currency) : "" })) })),
+  };
+}
+
+function fromDraftOptions(d: DraftOptions, currency: string): { ok: true; value: ItemOptions | null } | { ok: false; error: string } {
+  const variants = [];
+  for (const v of d.variants) {
+    const p = parsePriceToMinor(v.price, currency);
+    if (!v.name.trim()) return { ok: false, error: "Give every size a name." };
+    if (p === null) return { ok: false, error: `Enter a price for size “${v.name}”.` };
+    variants.push({ id: v.id, name: v.name.trim(), priceMinor: p });
+  }
+  const groups = [];
+  for (const g of d.groups) {
+    if (!g.name.trim()) return { ok: false, error: "Give every add-on group a name." };
+    const options = [];
+    for (const o of g.options) {
+      if (!o.name.trim()) return { ok: false, error: `Name every option in “${g.name}”.` };
+      const p = o.price.trim() ? parsePriceToMinor(o.price, currency) : 0;
+      if (p === null) return { ok: false, error: `Invalid price for “${o.name}”.` };
+      options.push({ id: o.id, name: o.name.trim(), priceMinor: p });
+    }
+    groups.push({ id: g.id, name: g.name.trim(), min: Math.min(g.min, options.length), max: Math.max(1, Math.min(g.max, options.length)), options });
+  }
+  return { ok: true, value: variants.length || groups.length ? { variants, groups } : null };
+}
 
 export function CategoryDialog(props: {
   restaurantId: string;
@@ -41,11 +85,13 @@ export function CategoryDialog(props: {
 function CategoryForm(props: { restaurantId: string; category?: EditorCategory; onOpenChange: (o: boolean) => void; onSaved: () => void }) {
   const [name, setName] = useState(props.category?.name ?? "");
   const [description, setDescription] = useState(props.category?.description ?? "");
+  const [scheduled, setScheduled] = useState(!!props.category?.availability);
+  const [avail, setAvail] = useState(toDraftAvailability(props.category?.availability));
   const [pending, start] = useTransition();
   const save = (e: React.FormEvent) => {
     e.preventDefault();
     start(async () => {
-      const res = await upsertCategory(props.restaurantId, { id: props.category?.id, name, description });
+      const res = await upsertCategory(props.restaurantId, { id: props.category?.id, name, description, availability: fromDraftAvailability(avail, scheduled) });
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -67,6 +113,8 @@ function CategoryForm(props: { restaurantId: string; category?: EditorCategory; 
         <Field label="Description (optional)" htmlFor="cat-desc">
           <Input id="cat-desc" maxLength={200} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Served 8 am – 12 pm" />
         </Field>
+        <ToggleRow label="Timed menu" hint="Breakfast, lunch, dinner or weekend-only sections" checked={scheduled} onChange={setScheduled} />
+        {scheduled && <AvailabilityEditor value={avail} onChange={setAvail} label="When this section can be ordered" />}
       </div>
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={() => props.onOpenChange(false)}>Cancel</Button>
@@ -85,6 +133,7 @@ export function ItemDialog(props: {
   defaultCategoryId?: string;
   onOpenChange: (o: boolean) => void;
   onSaved: () => void;
+  happyHourAllowed: boolean;
 }) {
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
@@ -101,6 +150,7 @@ function ItemForm(props: {
   defaultCategoryId?: string;
   onOpenChange: (o: boolean) => void;
   onSaved: () => void;
+  happyHourAllowed: boolean;
 }) {
   const it = props.item;
   const [form, setForm] = useState({
@@ -114,7 +164,15 @@ function ItemForm(props: {
     allergens: it?.allergens ?? [],
     bestseller: it?.bestseller ?? false,
     soldOut: it?.soldOut ?? false,
+    special: it?.special ?? false,
+    happyHour: it?.happyHour ?? false,
+    calories: it?.calories != null ? String(it.calories) : "",
+    nutrition: it?.nutrition ?? "",
   });
+  const [opts, setOpts] = useState<DraftOptions>(toDraftOptions(it?.options, props.currency));
+  const [showOpts, setShowOpts] = useState(!!it?.options);
+  const [scheduled, setScheduled] = useState(!!it?.availability);
+  const [avail, setAvail] = useState(toDraftAvailability(it?.availability));
   const [pending, start] = useTransition();
   const [upgrade, setUpgrade] = useState(false);
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -122,7 +180,14 @@ function ItemForm(props: {
   const save = (e: React.FormEvent) => {
     e.preventDefault();
     start(async () => {
-      const res = await upsertItem(props.restaurantId, { id: it?.id, ...form });
+      const o = fromDraftOptions(showOpts ? opts : { variants: [], groups: [] }, props.currency);
+      if (!o.ok) {
+        toast.error(o.error);
+        return;
+      }
+      // With sizes, the base price is the smallest size (used for "from ₹X" and sorting).
+      const price = o.value?.variants.length ? minorToInput(Math.min(...o.value.variants.map((v) => v.priceMinor)), props.currency) : form.price;
+      const res = await upsertItem(props.restaurantId, { id: it?.id, ...form, price, options: o.value, availability: fromDraftAvailability(avail, scheduled) });
       if (!res.ok) {
         toast.error(res.error);
         setUpgrade(!!res.upgrade);
@@ -145,7 +210,15 @@ function ItemForm(props: {
             <Input id="item-name" autoFocus required maxLength={100} value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Masala Dosa" />
           </Field>
           <Field label={`Price (${props.currency})`} htmlFor="item-price">
-            <Input id="item-price" required inputMode="decimal" value={form.price} onChange={(e) => set("price", e.target.value)} placeholder="149" />
+            <Input
+              id="item-price"
+              required={!(showOpts && opts.variants.length)}
+              disabled={showOpts && opts.variants.length > 0}
+              inputMode="decimal"
+              value={showOpts && opts.variants.length ? "" : form.price}
+              onChange={(e) => set("price", e.target.value)}
+              placeholder={showOpts && opts.variants.length ? "Set per size" : "149"}
+            />
           </Field>
         </div>
         <Field label="Description (optional)" htmlFor="item-desc">
@@ -194,10 +267,29 @@ function ItemForm(props: {
             })}
           </div>
         </Field>
+        <div className="grid gap-4 sm:grid-cols-[120px_1fr]">
+          <Field label="Calories (kcal)" htmlFor="item-kcal">
+            <Input id="item-kcal" inputMode="numeric" value={form.calories} onChange={(e) => set("calories", e.target.value.replace(/[^\d]/g, "").slice(0, 4))} placeholder="350" />
+          </Field>
+          <Field label="Nutrition (optional)" htmlFor="item-nutrition">
+            <Input id="item-nutrition" maxLength={120} value={form.nutrition} onChange={(e) => set("nutrition", e.target.value)} placeholder="Protein 12g · Carbs 40g · Fat 9g" />
+          </Field>
+        </div>
         <div className="grid gap-2 sm:grid-cols-2">
           <ToggleRow label="Bestseller" hint="Highlighted on your menu" checked={form.bestseller} onChange={(v) => set("bestseller", v)} />
           <ToggleRow label="Sold out" hint="Shown but can't be ordered" checked={form.soldOut} onChange={(v) => set("soldOut", v)} />
+          <ToggleRow label="Today's special" hint="Pinned to the top of your menu" checked={form.special} onChange={(v) => set("special", v)} />
+          <ToggleRow
+            label="Happy hour"
+            hint={props.happyHourAllowed ? "Discounted during happy hour" : "Pro — set the window in Promotions"}
+            checked={form.happyHour}
+            onChange={(v) => set("happyHour", v)}
+          />
         </div>
+        <ToggleRow label="Sizes & add-ons" hint="Half/Full, S/M/L, extra toppings, choices" checked={showOpts} onChange={setShowOpts} />
+        {showOpts && <OptionsEditor value={opts} onChange={setOpts} currency={props.currency} />}
+        <ToggleRow label="Schedule" hint="Only orderable on some days or hours" checked={scheduled} onChange={setScheduled} />
+        {scheduled && <AvailabilityEditor value={avail} onChange={setAvail} label="When this dish can be ordered" />}
         {upgrade && (
           <p className="rounded-lg bg-accent px-3 py-2 text-sm">
             Need more room? <Link href="/dashboard/billing" className="font-medium text-primary underline">Upgrade to Pro</Link>

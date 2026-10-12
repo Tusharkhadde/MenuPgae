@@ -10,6 +10,21 @@ const ROWS: [string, string, string][] = [
   ["Menu items per restaurant", String(PLANS.free.limits.itemsPerRestaurant), PLANS.pro.limits.itemsPerRestaurant.toLocaleString("en-US")],
   ["Table QR codes", String(PLANS.free.limits.tableQrCodes), String(PLANS.pro.limits.tableQrCodes)],
   ["WhatsApp ordering", "✓", "✓"],
+  ["Orders inbox (live, sound alerts, daily totals)", "✓", "✓"],
+  ["Order history", `${PLANS.free.limits.orderHistoryDays} days`, `${PLANS.pro.limits.orderHistoryDays} days`],
+  ["Sizes & add-ons", "✓", "✓"],
+  ["UPI pay link & QR (India, no fees)", "✓", "✓"],
+  ["Call waiter / request bill", "✓", "✓"],
+  ["Timed menus & today's specials", "✓", "✓"],
+  ["Reviews funnel (Google + private feedback)", "✓", "✓"],
+  ["CSV menu import, printable menu, PWA, embed, link-in-bio", "✓", "✓"],
+  ["Extra menu languages", String(PLANS.free.limits.extraLanguages), String(PLANS.pro.limits.extraLanguages)],
+  ["Kitchen display screen", "—", "✓"],
+  ["Coupon codes & happy-hour pricing", "—", "✓"],
+  ["Table reservations", "—", "✓"],
+  ["Team members (manager / staff)", "—", `Up to ${PLANS.pro.limits.teamMembers}`],
+  ["Weekly email digest", "—", "✓"],
+  ["AI translate & menu-photo import*", "—", "✓"],
   ["Themes", "4", "4"],
   ["Analytics history", `${PLANS.free.limits.analyticsDays} days`, `${PLANS.pro.limits.analyticsDays} days`],
   ["Custom domain", "—", "✓"],
@@ -46,6 +61,7 @@ export default function PricingPage() {
           </tbody>
         </table>
       </div>
+      <p className="mx-auto mt-3 max-w-3xl text-xs text-muted-foreground">* AI tools are available when the server has a Google Gemini API key configured.</p>
       <div className="mt-20">
         <h2 className="mb-8 text-center text-2xl font-semibold tracking-tight">FAQ</h2>
         <Faq />

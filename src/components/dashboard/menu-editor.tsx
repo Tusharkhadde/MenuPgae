@@ -15,8 +15,13 @@ import {
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  ClockIcon,
+  FileUpIcon,
   FlameIcon,
   GripVerticalIcon,
+  LanguagesIcon,
+  PrinterIcon,
+  LayersIcon,
   MoreHorizontalIcon,
   PartyPopperIcon,
   PencilIcon,
@@ -43,6 +48,9 @@ import {
 } from "@/server/actions/menu";
 import { CategoryDialog, ItemDialog } from "@/components/dashboard/menu-dialogs";
 import type { PlanId } from "@/config/plans";
+import type { ItemOptions } from "@/lib/options";
+import { describeAvailability, type Availability } from "@/lib/schedule";
+import { ImportDialog } from "@/components/dashboard/import-dialog";
 import { cn } from "@/lib/utils";
 
 export type EditorItem = {
@@ -57,8 +65,15 @@ export type EditorItem = {
   allergens: string[];
   bestseller: boolean;
   soldOut: boolean;
+  options: ItemOptions | null;
+  special: boolean;
+  happyHour: boolean;
+  availability: Availability | null;
+  calories: number | null;
+  nutrition: string | null;
 };
-export type EditorCategory = { id: string; name: string; description: string | null; items: EditorItem[] };
+export type EditorCategory = { id: string; name: string; description: string | null; availability: Availability | null; items: EditorItem[] };
+type Flag = "soldOut" | "bestseller" | "special";
 
 export function MenuEditor(props: {
   restaurantId: string;
@@ -68,12 +83,15 @@ export function MenuEditor(props: {
   itemLimit: number;
   plan: PlanId;
   welcome: boolean;
+  happyHourAllowed: boolean;
+  aiAvailable: boolean;
 }) {
   const router = useRouter();
   const [cats, setCats] = useState(props.initial);
   const [, startTransition] = useTransition();
   const [catDialog, setCatDialog] = useState<{ open: boolean; category?: EditorCategory }>({ open: false });
   const [itemDialog, setItemDialog] = useState<{ open: boolean; item?: EditorItem; categoryId?: string }>({ open: false });
+  const [importOpen, setImportOpen] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -111,7 +129,7 @@ export function MenuEditor(props: {
     });
   }
 
-  function toggleFlag(item: EditorItem, flag: "soldOut" | "bestseller", value: boolean) {
+  function toggleFlag(item: EditorItem, flag: Flag, value: boolean) {
     setCats((prev) => prev.map((c) => ({ ...c, items: c.items.map((i) => (i.id === item.id ? { ...i, [flag]: value } : i)) })));
     startTransition(async () => {
       const res = await setItemFlag(props.restaurantId, item.id, flag, value);
@@ -178,7 +196,16 @@ export function MenuEditor(props: {
             </>
           )}
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="ghost" onClick={() => setImportOpen(true)} disabled={atLimit}>
+            <FileUpIcon /> Import
+          </Button>
+          <Button asChild variant="ghost">
+            <Link href={`/dashboard/r/${props.restaurantId}/menu/translate`}><LanguagesIcon /> Translate</Link>
+          </Button>
+          <Button asChild variant="ghost">
+            <Link href={`/dashboard/r/${props.restaurantId}/menu/print`}><PrinterIcon /> Print</Link>
+          </Button>
           <Button variant="outline" onClick={() => setCatDialog({ open: true })}>
             <PlusIcon /> Category
           </Button>
@@ -198,6 +225,7 @@ export function MenuEditor(props: {
           <div className="mt-6 flex justify-center gap-2">
             <Button onClick={() => setCatDialog({ open: true })}><PlusIcon /> Add a category</Button>
             <Button variant="outline" onClick={loadSample}><SparklesIcon /> Use sample menu</Button>
+            <Button variant="outline" onClick={() => setImportOpen(true)}><FileUpIcon /> Import CSV</Button>
           </div>
         </div>
       ) : (
@@ -242,6 +270,15 @@ export function MenuEditor(props: {
         defaultCategoryId={itemDialog.categoryId}
         onOpenChange={(open) => setItemDialog((s) => ({ ...s, open }))}
         onSaved={refresh}
+        happyHourAllowed={props.happyHourAllowed}
+      />
+      <ImportDialog
+        restaurantId={props.restaurantId}
+        currency={props.currency}
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={refresh}
+        aiAvailable={props.aiAvailable}
       />
     </div>
   );
@@ -257,7 +294,7 @@ function SortableCategory(props: {
   onAddItem: () => void;
   onEditItem: (i: EditorItem) => void;
   onDeleteItem: (i: EditorItem) => void;
-  onToggle: (i: EditorItem, flag: "soldOut" | "bestseller", v: boolean) => void;
+  onToggle: (i: EditorItem, flag: Flag, v: boolean) => void;
   onReorder: (ids: string[]) => void;
 }) {
   const { category: cat } = props;
@@ -281,7 +318,12 @@ function SortableCategory(props: {
         </button>
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-semibold">{cat.name}</h3>
-          {cat.description && <p className="truncate text-xs text-muted-foreground">{cat.description}</p>}
+          {(cat.description || cat.availability) && (
+            <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+              {describeAvailability(cat.availability) && <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5"><ClockIcon className="size-3" /> {describeAvailability(cat.availability)}</span>}
+              {cat.description}
+            </p>
+          )}
         </div>
         <span className="text-xs text-muted-foreground">{cat.items.length}</span>
         <Button size="sm" variant="ghost" onClick={props.onAddItem} disabled={!props.canAdd}>
@@ -292,7 +334,7 @@ function SortableCategory(props: {
             <Button size="icon-sm" variant="ghost" aria-label="Category options"><MoreHorizontalIcon /></Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={props.onEdit}><PencilIcon /> Rename</DropdownMenuItem>
+            <DropdownMenuItem onSelect={props.onEdit}><PencilIcon /> Edit / schedule</DropdownMenuItem>
             <DropdownMenuItem variant="destructive" onSelect={props.onDelete}><Trash2Icon /> Delete category</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -328,9 +370,10 @@ function SortableItem(props: {
   currency: string;
   onEdit: () => void;
   onDelete: () => void;
-  onToggle: (flag: "soldOut" | "bestseller", v: boolean) => void;
+  onToggle: (flag: Flag, v: boolean) => void;
 }) {
   const { item } = props;
+  const hasOpts = !!item.options && (item.options.variants.length > 0 || item.options.groups.length > 0);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
   return (
     <li
@@ -355,8 +398,13 @@ function SortableItem(props: {
           <span className="truncate text-sm font-medium">{item.name}</span>
           {item.bestseller && <StarIcon className="size-3.5 shrink-0 fill-amber-400 text-amber-400" aria-label="Bestseller" />}
           {item.spicy > 0 && <FlameIcon className="size-3.5 shrink-0 fill-red-500 text-red-500" aria-label="Spicy" />}
+          {item.special && <SparklesIcon className="size-3.5 shrink-0 text-primary" aria-label="Today's special" />}
+          {hasOpts && <LayersIcon className="size-3.5 shrink-0 text-muted-foreground" aria-label="Has sizes or add-ons" />}
+          {item.availability && describeAvailability(item.availability) && <ClockIcon className="size-3.5 shrink-0 text-muted-foreground" aria-label="Scheduled" />}
         </div>
-        <span className="text-xs text-muted-foreground">{formatMoney(item.priceMinor, props.currency)}</span>
+        <span className="text-xs text-muted-foreground">
+          {hasOpts && item.options?.variants.length ? `${item.options.variants.map((v) => `${v.name} ${formatMoney(v.priceMinor, props.currency)}`).join(" · ")}` : formatMoney(item.priceMinor, props.currency)}
+        </span>
       </button>
       <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
         <span className="hidden sm:inline">{item.soldOut ? "Sold out" : "Available"}</span>
@@ -370,6 +418,9 @@ function SortableItem(props: {
           <DropdownMenuItem onSelect={props.onEdit}><PencilIcon /> Edit</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => props.onToggle("bestseller", !item.bestseller)}>
             <StarIcon /> {item.bestseller ? "Remove bestseller" : "Mark as bestseller"}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => props.onToggle("special", !item.special)}>
+            <SparklesIcon /> {item.special ? "Remove from today's specials" : "Make today's special"}
           </DropdownMenuItem>
           <DropdownMenuItem variant="destructive" onSelect={props.onDelete}><Trash2Icon /> Delete</DropdownMenuItem>
         </DropdownMenuContent>

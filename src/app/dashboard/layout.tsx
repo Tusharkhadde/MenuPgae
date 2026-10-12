@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { asc, eq } from "drizzle-orm";
-import { requireUser, getPlanForUser } from "@/server/session";
-import { getDb } from "@/lib/db";
-import { restaurants } from "@/lib/db/schema";
+import { requireUser, getPlanForUser, listAccessibleRestaurants } from "@/server/session";
 import { Logo } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/dashboard/user-menu";
@@ -13,11 +10,8 @@ export const metadata: Metadata = { title: "Dashboard", robots: { index: false }
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
-  const db = await getDb();
-  const [list, plan] = await Promise.all([
-    db.select({ id: restaurants.id, name: restaurants.name }).from(restaurants).where(eq(restaurants.ownerId, user.id)).orderBy(asc(restaurants.createdAt)),
-    getPlanForUser(user.id),
-  ]);
+  const [{ owned, shared }, plan] = await Promise.all([listAccessibleRestaurants(user), getPlanForUser(user.id)]);
+  const list = [...owned, ...shared.map((s) => s.restaurant)].map((r) => ({ id: r.id, name: r.name }));
 
   return (
     <div className="flex min-h-dvh flex-col bg-muted/30">

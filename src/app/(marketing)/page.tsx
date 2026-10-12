@@ -1,5 +1,10 @@
 import Link from "next/link";
 import {
+  BellRingIcon,
+  ChefHatIcon,
+  IndianRupeeIcon,
+  LayersIcon,
+  StarIcon,
   ArrowRightIcon,
   BarChart3Icon,
   ClockIcon,
@@ -21,6 +26,11 @@ import { Faq } from "@/components/marketing/faq";
 const FEATURES = [
   { icon: QrCodeIcon, title: "A QR code for every table", body: "Download print-ready PNG/SVG codes or print table tents straight from the dashboard. Each table's code tells you where the order came from." },
   { icon: MessageCircleIcon, title: "Orders on WhatsApp", body: "Guests build a cart and send it to your WhatsApp in one tap — items, quantities, total and table number already filled in." },
+  { icon: ChefHatIcon, title: "Live orders inbox", body: "Every order also lands in your dashboard with a sound alert. Move it from new to preparing to ready, mark it paid, and see today's sales at a glance." },
+  { icon: LayersIcon, title: "Sizes & add-ons", body: "Half/Full, S/M/L, extra cheese, choose-your-bread — priced correctly in the cart, the WhatsApp message and the kitchen ticket." },
+  { icon: IndianRupeeIcon, title: "UPI pay, zero fees", body: "After ordering, guests get a UPI button and QR with the exact amount — paid straight to your account, no payment gateway." },
+  { icon: BellRingIcon, title: "Call waiter & bill", body: "Guests at a table tap a button and your dashboard lights up with the table number." },
+  { icon: StarIcon, title: "More Google reviews", body: "Happy guests are invited to review you on Google; unhappy guests tell you privately first." },
   { icon: SearchIcon, title: "Search & dietary filters", body: "Veg, non-veg, vegan and egg marks, spice levels, allergens and a search bar that finds a dish as you type." },
   { icon: ToggleRightIcon, title: "Sold out? One tap.", body: "Toggle dishes off when the kitchen runs out and back on tomorrow. Changes show up on the live menu right away." },
   { icon: ClockIcon, title: "Open-now badge", body: "Set your hours (split shifts and late nights included) and guests see whether you're open in your local time." },
