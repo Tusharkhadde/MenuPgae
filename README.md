@@ -28,8 +28,9 @@ Owners build their menu in a dashboard, print table QR codes, and guests order o
 | **Scheduling & specials** | Timed menus per category (breakfast/lunch/dinner), day-of-week + time windows per item, "Today's special" strip, promo banner. Happy-hour pricing and coupon codes are Pro |
 | **Reviews funnel** | Post-order rating: 4–5★ → your Google reviews link, 1–3★ → private feedback in the dashboard |
 | **Reservations** (Pro) | Guest request form (date, time, party size) → dashboard + email alert (Resend) → accept/decline, guest emailed + one-tap WhatsApp reply |
-| **Multi-language menus** | Owner-entered translations per item/category, language switcher, RTL for Arabic. 1 extra language on Free, 6 on Pro. Optional AI drafts (Gemini) on Pro |
-| **Menu import** | CSV (Excel/Sheets export) with template + preview + per-line errors. Optional AI import from a menu photo (Gemini, Pro) |
+| **Multi-language menus** | Owner-entered translations per item/category, language switcher, RTL for Arabic. 1 extra language on Free, 6 on Pro. Optional AI drafts on Pro with open **Gemma** models (Google AI Studio or local Ollama) and a curated **dish glossary** that keeps names like *Misal Pav* intact and flags literal translations |
+| **Menu import** | CSV (Excel/Sheets export) with template + preview + per-line errors. Optional AI import from a menu photo (Gemma vision, Pro) |
+| **Prep planner** (Pro) | Per-dish portion forecast for the next 1–7 days from your own orders (**TabPFN**, a tabular foundation model), unusual-day detection, "86 risk", and a plain-language prep list written by **Gemma**. Runs as a small Python agent on Render's free plan; synthetic demo data (clearly labelled) when there aren't enough orders yet |
 | **Team** (Pro) | Invite by email as manager (menu, orders, guests, QR, analytics) or staff (orders only). Enforced server-side |
 | **Share** | Installable PWA with offline menu, iframe embed snippet for existing websites (`/embed/{slug}`), link-in-bio page (`/l/{slug}`), printable branded A4 menu, calories + nutrition |
 | **Weekly digest** (Pro) | Monday email with views, orders, sales, top dishes, ratings and pending reservations (Vercel Cron + Resend; skipped without keys) |
@@ -74,6 +75,7 @@ To use a real Postgres locally, copy `.env.example` → `.env.local` and set `DA
 | `npm run db:migrate` | Apply migrations (`DATABASE_URL_UNPOOLED` or `DATABASE_URL`) |
 | `npm run db:seed` | Migrate + (re)create the public demo restaurant at `/r/demo` |
 | `npm run db:studio` | Drizzle Studio |
+| `npm run eval:translate` | Score dish-name preservation of the configured Gemma model (needs an AI provider) |
 
 ---
 
@@ -149,7 +151,10 @@ Owners enter a domain in **Settings → Custom domain** and get DNS instructions
 | `PRO_EMAILS` | optional | Comma-separated emails that get Pro for free (your freelance clients) |
 | `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID`, `CUSTOM_DOMAIN_TARGET` | optional | Automatic custom domains |
 | `CRON_SECRET` | optional | Protects `/api/cron/digest` (Vercel Cron sends it as a Bearer token). Unset → digest is skipped |
-| `GEMINI_API_KEY`, `GEMINI_MODEL` | optional | AI translate + menu-photo import (Pro). Free Google AI Studio key; default model `gemini-3.5-flash-lite` |
+| `AI_PROVIDER` | optional | `google` (default when a key is set) or `ollama` |
+| `GOOGLE_AI_API_KEY`, `GEMMA_MODEL`, `GEMMA_VISION_MODEL`, `GEMMA_FALLBACK_MODEL` | optional | AI translate + menu-photo import (Pro) on Gemma via Google AI Studio. Default `gemma-3-27b-it`; one retry on `gemma-4-26b-a4b-it` if the id 404s. `GEMINI_API_KEY` still accepted |
+| `OLLAMA_BASE_URL` / `OPENAI_COMPAT_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_VISION_MODEL`, `OPENAI_COMPAT_API_KEY` | optional | Same features on a local/self-hosted Gemma (default `gemma3:4b`) |
+| `AGENT_URL`, `AGENT_SECRET` | optional | Prep planner (Pro): URL of the `/agent` service (e.g. on Render) and the shared secret |
 
 `AUTH_RESEND_KEY` + `EMAIL_FROM` also power reservation alerts, team invites and the weekly digest; without them those emails are skipped and everything else works.
 
@@ -162,6 +167,9 @@ Owners enter a domain in **Settings → Custom domain** and get DNS instructions
 
 ### Migrations
 `drizzle/0001_beast.sql` only **adds** tables (`orders`, `service_requests`, `feedback`, `reservations`, `coupons`, `team_members`) and columns with defaults — safe on an existing database. It runs automatically on deploy (`vercel-build`) or with `npm run db:migrate`.
+
+### Open models, the prep agent and Render
+See **[docs/HACKATHON.md](docs/HACKATHON.md)** for the architecture, setup of Google AI Studio (Gemma), Ollama (local), Prior Labs (TabPFN) and the Render blueprint (`render.yaml` deploys `/agent` on the free plan), the translation eval (`npm run eval:translate`) and TabPFN licensing notes. `drizzle/0002_glossary.sql` adds the `glossary_entries` table (additive, safe on an existing database).
 
 ---
 
@@ -188,10 +196,12 @@ src/
     api/                auth, upload, track, orders (+quote), service requests, feedback, reservations, live feed, PWA manifest/icon, digest cron, billing, Dodo webhook, QR downloads
   components/           ui (shadcn), marketing, dashboard, menu (public page)
   config/               plans.ts (limits + placeholder prices), reserved slugs, site
-  lib/                  pure logic: hours, money, whatsapp, options (variants/add-ons), order pricing, schedule (timed menus, happy hour, coupons), upi, csv-import, languages, reservations, digest, roles, limits, validation, billing/*, qr, storage, env
+  lib/                  pure logic: ai (Gemma provider layer, JSON parsing, translate), glossary, prep (order history, synthetic data), hours, money, whatsapp, options (variants/add-ons), order pricing, schedule (timed menus, happy hour, coupons), upi, csv-import, languages, reservations, digest, roles, limits, validation, billing/*, qr, storage, env
   server/               server-only data access, actions (all authorized), billing, analytics, demo sandbox
 drizzle/                SQL migrations
-scripts/                migrate + seed
+scripts/                migrate + seed + eval-translate (glossary-preservation eval)
+agent/                  Python FastAPI prep agent: TabPFN forecast + Gemma prep list (pytest, Render)
+docs/HACKATHON.md       open-model architecture, setup, DEV post outline
 public/sw.js            service worker (offline menus)
 tests/                  Vitest unit tests (hours, money, WhatsApp, plans/limits/gating, billing webhook, validation, options, order pricing, scheduling/coupons, UPI, CSV import, languages, reservations, digest, roles)
 ```
