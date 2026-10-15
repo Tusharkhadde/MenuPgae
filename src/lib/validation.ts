@@ -3,6 +3,8 @@ import { CURRENCY_CODES } from "@/lib/money";
 import { DAYS, TIME_RE } from "@/lib/hours";
 import { SLUG_RE } from "@/lib/slug";
 import { THEME_IDS } from "@/lib/themes";
+import { itemOptionsSchema } from "@/lib/options";
+import { availabilitySchema } from "@/lib/schedule";
 
 const emptyToNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
 
@@ -129,12 +131,19 @@ export const itemSchema = z.object({
   allergens: z.array(z.enum(ALLERGENS)).max(ALLERGENS.length),
   bestseller: z.boolean(),
   soldOut: z.boolean(),
+  options: itemOptionsSchema.nullable().optional().transform((v) => v ?? null),
+  special: z.boolean().default(false),
+  happyHour: z.boolean().default(false),
+  availability: availabilitySchema.optional().transform((v) => v ?? null),
+  calories: z.preprocess((v) => (v === "" || v === null || v === undefined ? null : Number(v)), z.number().int().min(0).max(9999).nullable()),
+  nutrition: optionalText(120),
 });
 
 export const categorySchema = z.object({
   id: z.string().optional(),
   name: z.string().trim().min(1, "Name is required").max(60),
   description: optionalText(200),
+  availability: availabilitySchema.optional().transform((v) => v ?? null),
 });
 
 export const reorderSchema = z.object({ ids: z.array(z.string().min(1)).min(1).max(2000) });

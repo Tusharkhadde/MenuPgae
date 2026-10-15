@@ -72,3 +72,23 @@ describe("limits", () => {
     expect(analyticsSince("pro", now)).toBe("2026-07-15");
   });
 });
+
+describe("beast-mode feature gating", () => {
+  it("keeps core ordering features on Free and gates premium ones to Pro", async () => {
+    const { hasFeature, assertFeature, assertLanguages, assertTeamSize, LimitError: LE } = await import("@/lib/limits");
+    expect(PLANS.free.limits).toMatchObject({ orderHistoryDays: 7, extraLanguages: 1, teamMembers: 0 });
+    expect(PLANS.pro.limits).toMatchObject({ orderHistoryDays: 90, extraLanguages: 6, teamMembers: 10 });
+    for (const f of ["kitchenDisplay", "coupons", "happyHour", "reservations", "weeklyDigest", "aiTools"] as const) {
+      expect(hasFeature("free", f)).toBe(false);
+      expect(hasFeature("pro", f)).toBe(true);
+      expect(() => assertFeature("free", f)).toThrow(LE);
+      expect(() => assertFeature("pro", f)).not.toThrow();
+    }
+    expect(() => assertLanguages("free", 1)).not.toThrow();
+    expect(() => assertLanguages("free", 2)).toThrow(/Upgrade/);
+    expect(() => assertLanguages("pro", 6)).not.toThrow();
+    expect(() => assertTeamSize("free", 1)).toThrow(/Pro feature/);
+    expect(() => assertTeamSize("pro", 10)).not.toThrow();
+    expect(() => assertTeamSize("pro", 11)).toThrow();
+  });
+});

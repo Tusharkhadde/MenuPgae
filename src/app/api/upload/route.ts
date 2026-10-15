@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { validateImage } from "@/lib/image-validate";
 import { storeImage, StorageNotConfiguredError } from "@/lib/storage";
 import { rateLimit } from "@/lib/rate-limit";
-import { findOwnedRestaurant, getSessionUser } from "@/server/session";
+import { findAccessibleRestaurant, getSessionUser } from "@/server/session";
+import { roleAtLeast } from "@/lib/roles";
 import { isSameOrigin } from "@/lib/http";
 
 export async function POST(request: Request) {
@@ -28,7 +29,8 @@ export async function POST(request: Request) {
 
   let folder = `u/${user.id}`;
   if (typeof restaurantId === "string" && restaurantId) {
-    const r = await findOwnedRestaurant(user.id, restaurantId);
+    const found = await findAccessibleRestaurant(user, restaurantId);
+    const r = found && roleAtLeast(found.role, "manager") ? found.restaurant : null;
     if (!r) return NextResponse.json({ error: "Restaurant not found." }, { status: 404 });
     folder = `r/${r.id}`;
   }

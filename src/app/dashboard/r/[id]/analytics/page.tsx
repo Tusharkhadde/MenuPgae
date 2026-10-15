@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { EyeIcon, MessageCircleIcon, QrCodeIcon } from "lucide-react";
-import { requireOwnedRestaurant, getPlanForUser } from "@/server/session";
+import { requireRestaurantAccess, getPlanForUser } from "@/server/session";
 import { getAnalytics } from "@/server/analytics";
 import { analyticsSince, limitsFor } from "@/lib/limits";
 import { SectionCard } from "@/components/dashboard/field";
@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 
 export default async function AnalyticsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { user, restaurant } = await requireOwnedRestaurant(id);
-  const plan = await getPlanForUser(user.id);
+  const { restaurant } = await requireRestaurantAccess(id, "manager");
+  const plan = await getPlanForUser(restaurant.ownerId);
   const days = limitsFor(plan).analyticsDays;
   const data = await getAnalytics(restaurant.id, analyticsSince(plan));
   const max = Math.max(1, ...data.days.map((d) => d.view + d.scan));

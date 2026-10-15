@@ -24,6 +24,24 @@ export type PlanLimits = {
   removeBadge: boolean;
   /** Table QR codes that can be generated at once. */
   tableQrCodes: number;
+  /** Days of order history visible in the inbox. */
+  orderHistoryDays: number;
+  /** Full-screen kitchen display (KDS) mode. */
+  kitchenDisplay: boolean;
+  /** Coupon codes applied in the cart. */
+  coupons: boolean;
+  /** Happy-hour pricing (time-window discount on chosen items). */
+  happyHour: boolean;
+  /** Menu languages besides the main one. */
+  extraLanguages: number;
+  /** Table reservation requests. */
+  reservations: boolean;
+  /** Invited staff accounts (manager / staff). */
+  teamMembers: number;
+  /** Weekly email digest. */
+  weeklyDigest: boolean;
+  /** Optional AI helpers (auto-translate, menu photo import) — need GEMINI_API_KEY. */
+  aiTools: boolean;
 };
 
 export type Plan = {
@@ -47,14 +65,27 @@ export const PLANS: Record<PlanId, Plan> = {
       customDomain: false,
       removeBadge: false,
       tableQrCodes: 30,
+      orderHistoryDays: 7,
+      kitchenDisplay: false,
+      coupons: false,
+      happyHour: false,
+      extraLanguages: 1,
+      reservations: false,
+      teamMembers: 0,
+      weeklyDigest: false,
+      aiTools: false,
     },
     features: [
       "1 restaurant",
       "Up to 50 menu items",
       "QR codes for every table",
-      "WhatsApp ordering",
-      "4 themes, mobile-first",
-      "7-day analytics",
+      "WhatsApp ordering + orders inbox",
+      "Sizes & add-ons, today's specials, timed menus",
+      "UPI pay link & QR (India), call-waiter buttons",
+      "Reviews funnel, CSV import, printable menu",
+      "Menu in 1 extra language",
+      "4 themes, mobile-first, installable",
+      "7-day analytics & order history",
       "menupage link (yourname on our domain)",
     ],
   },
@@ -70,13 +101,28 @@ export const PLANS: Record<PlanId, Plan> = {
       customDomain: true,
       removeBadge: true,
       tableQrCodes: 200,
+      orderHistoryDays: 90,
+      kitchenDisplay: true,
+      coupons: true,
+      happyHour: true,
+      extraLanguages: 6,
+      reservations: true,
+      teamMembers: 10,
+      weeklyDigest: true,
+      aiTools: true,
     },
     features: [
       "Up to 10 restaurants / branches",
       "Up to 1,000 items per menu",
       "Your own custom domain",
       "No MenuPage badge",
-      "90-day analytics & top items",
+      "90-day analytics & order history",
+      "Kitchen display screen",
+      "Coupon codes & happy-hour pricing",
+      "Table reservations",
+      "Menu in up to 6 extra languages",
+      "Team members (manager / staff)",
+      "Weekly email digest",
       "Everything in Free",
     ],
   },

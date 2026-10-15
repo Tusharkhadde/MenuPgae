@@ -16,5 +16,6 @@ export function menuMetadata(menu: PublicMenu, canonical: string): Metadata {
     openGraph: { type: "website", title, description, url: canonical, siteName: r.name },
     twitter: { card: "summary_large_image", title, description },
     icons: r.logoUrl ? { icon: r.logoUrl, apple: r.logoUrl } : undefined,
+    manifest: `/api/manifest/${r.slug}`,
   };
 }

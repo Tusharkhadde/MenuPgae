@@ -2,15 +2,24 @@ import "server-only";
 import { cache } from "react";
 import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { categories, items, restaurants, users, type Category, type Item, type Restaurant } from "@/lib/db/schema";
+import { categories, coupons, items, restaurants, users, type Category, type Item, type Restaurant } from "@/lib/db/schema";
 import { getPlanForUser } from "@/server/session";
-import { limitsFor, showBadge } from "@/lib/limits";
+import { hasFeature, limitsFor, showBadge } from "@/lib/limits";
+import type { PlanId } from "@/config/plans";
 
 export type PublicMenu = {
   restaurant: Restaurant;
   categories: (Category & { items: Item[] })[];
   showBadge: boolean;
   isDemo: boolean;
+  plan: PlanId;
+  /** Guest features after plan gating. */
+  features: {
+    coupons: boolean;
+    happyHour: boolean;
+    reservations: boolean;
+    languages: string[];
+  };
 };
 
 async function load(where: ReturnType<typeof eq>): Promise<PublicMenu | null> {
@@ -23,11 +32,12 @@ async function load(where: ReturnType<typeof eq>): Promise<PublicMenu | null> {
     .limit(1);
   if (!row) return null;
   const r = row.restaurant;
-  const [cats, its, plan, siblings] = await Promise.all([
+  const [cats, its, plan, siblings, activeCoupons] = await Promise.all([
     db.select().from(categories).where(eq(categories.restaurantId, r.id)).orderBy(asc(categories.position), asc(categories.createdAt)),
     db.select().from(items).where(eq(items.restaurantId, r.id)).orderBy(asc(items.position), asc(items.createdAt)),
     getPlanForUser(r.ownerId),
     db.select({ id: restaurants.id }).from(restaurants).where(eq(restaurants.ownerId, r.ownerId)).orderBy(asc(restaurants.createdAt)),
+    db.select({ id: coupons.id }).from(coupons).where(and(eq(coupons.restaurantId, r.id), eq(coupons.active, true))).limit(1),
   ]);
   // After a downgrade nothing is deleted: branches and items beyond the plan's limits are just paused.
   const limits = limitsFor(plan);
@@ -44,6 +54,13 @@ async function load(where: ReturnType<typeof eq>): Promise<PublicMenu | null> {
       .filter((c) => c.items.length > 0),
     showBadge: showBadge(plan),
     isDemo: row.isDemo || r.slug === "demo",
+    plan,
+    features: {
+      coupons: hasFeature(plan, "coupons") && activeCoupons.length > 0,
+      happyHour: hasFeature(plan, "happyHour") && !!r.happyHour?.enabled,
+      reservations: hasFeature(plan, "reservations") && r.reservationsEnabled,
+      languages: r.languages.slice(0, limits.extraLanguages),
+    },
   };
 }
 
