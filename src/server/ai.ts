@@ -1,73 +1,56 @@
 import "server-only";
-import { env, features } from "@/lib/env";
+import { eq } from "drizzle-orm";
+import { aiConfig } from "@/lib/env";
+import { AiError, createAiClient, type AiClient } from "@/lib/ai/client";
+import { readMenuImage, translateMenu, type TranslateInput, type TranslateOutput } from "@/lib/ai/translate";
+import { mergeGlossary, type GlossaryEntry } from "@/lib/glossary";
+import { getDb } from "@/lib/db";
+import { glossaryEntries } from "@/lib/db/schema";
 import { UserError } from "@/server/actions/result";
 
 /**
- * Optional AI helpers through the Gemini API (free tier is enough).
- * Everything here is OFF unless GEMINI_API_KEY is set; callers show a friendly
- * "not configured" state. Default model: gemini-3.5-flash-lite (override with GEMINI_MODEL).
+ * Optional AI helpers on open-weight Gemma models.
+ *   AI_PROVIDER=google (default): Gemma via Google AI Studio (GOOGLE_AI_API_KEY; GEMINI_API_KEY accepted)
+ *   AI_PROVIDER=ollama:           Ollama / any OpenAI-compatible server (OLLAMA_BASE_URL, OLLAMA_MODEL)
+ * Everything here is OFF unless one is configured; callers show a friendly "not configured" state.
  */
-const DEFAULT_MODEL = "gemini-3.5-flash-lite";
 
-async function generateJson(parts: unknown[]): Promise<unknown> {
-  if (!features.gemini()) throw new UserError("AI tools aren't set up on this server (GEMINI_API_KEY is missing).");
-  const model = env().GEMINI_MODEL ?? DEFAULT_MODEL;
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": env().GEMINI_API_KEY! },
-    body: JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { responseMimeType: "application/json", temperature: 0.2 } }),
-    signal: AbortSignal.timeout(45_000),
-  }).catch(() => null);
-  if (!res) throw new UserError("The AI service didn't respond. Try again in a minute.");
-  if (res.status === 429) throw new UserError("The AI free-tier limit was reached. Try again in a minute.");
-  if (!res.ok) {
-    console.error("[menupage] gemini error", res.status, await res.text().catch(() => ""));
-    throw new UserError("The AI service returned an error. Try again later.");
-  }
-  const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
-  const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+function client(): AiClient {
+  const cfg = aiConfig();
+  if (!cfg) throw new UserError("AI tools aren't set up on this server (set GOOGLE_AI_API_KEY, or AI_PROVIDER=ollama).");
+  return createAiClient(cfg);
+}
+
+/** Map provider errors to messages an owner can act on (details go to the server log). */
+async function friendly<T>(fn: () => Promise<T>): Promise<T> {
   try {
-    return JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, ""));
-  } catch {
-    throw new UserError("The AI answer couldn't be read. Try again.");
-  }
-}
-
-export async function geminiTranslate(
-  texts: { id: string; name: string; description: string | null }[],
-  lang: string,
-): Promise<Record<string, { name: string; description: string | null }>> {
-  if (!texts.length) return {};
-  const prompt =
-    `Translate these restaurant menu entries into the language with ISO code "${lang}". ` +
-    "Keep dish names that are proper nouns recognisable (transliterate rather than literally translate when natural). " +
-    'Return ONLY a JSON object mapping each id to {"name": string, "description": string|null}.\n\n' +
-    JSON.stringify(texts);
-  const out = (await generateJson([{ text: prompt }])) as Record<string, { name?: unknown; description?: unknown }>;
-  const result: Record<string, { name: string; description: string | null }> = {};
-  for (const t of texts) {
-    const v = out?.[t.id];
-    if (v && typeof v.name === "string") {
-      result[t.id] = { name: v.name.slice(0, 100), description: typeof v.description === "string" ? v.description.slice(0, 400) : null };
+    return await fn();
+  } catch (err) {
+    if (err instanceof AiError) {
+      if (err.kind === "http" || err.kind === "model_not_found") console.error("[menupage] AI error", err.message);
+      if (err.kind === "rate_limited" || err.kind === "unreachable" || err.kind === "parse" || err.kind === "empty") throw new UserError(err.message);
+      throw new UserError("The AI service returned an error. Try again later.");
     }
+    throw err;
   }
-  return result;
 }
 
-/** Read a photo of a printed menu into CSV-like rows: [category, name, description, price]. */
-export async function geminiMenuFromImage(base64: string, mimeType: string): Promise<string[][]> {
-  const prompt =
-    "This is a photo of a restaurant menu. Extract every dish. " +
-    'Return ONLY JSON: {"items":[{"category":string,"name":string,"description":string|null,"price":string,"diet":"veg"|"nonveg"|"vegan"|"egg"|null}]}. ' +
-    "price is the number only (no currency symbol). If a dish has several sizes, use the format Half:120|Full:200 in a \"variants\" field and leave price empty. Do not invent dishes.";
-  const out = (await generateJson([{ text: prompt }, { inline_data: { mime_type: mimeType, data: base64 } }])) as {
-    items?: { category?: unknown; name?: unknown; description?: unknown; price?: unknown; diet?: unknown; variants?: unknown }[];
-  };
-  const str = (v: unknown) => (typeof v === "string" || typeof v === "number" ? String(v) : "");
-  const rows: string[][] = [["category", "name", "description", "price", "diet", "variants"]];
-  for (const it of out?.items ?? []) {
-    if (!str(it.name)) continue;
-    rows.push([str(it.category), str(it.name), str(it.description), str(it.price), str(it.diet), str(it.variants)]);
-  }
-  return rows;
+/** Built-in glossary merged with this restaurant's own entries. */
+export async function glossaryFor(restaurantId: string): Promise<GlossaryEntry[]> {
+  const db = await getDb();
+  const rows = await db.select().from(glossaryEntries).where(eq(glossaryEntries.restaurantId, restaurantId));
+  return mergeGlossary(rows.map((r) => ({ term: r.term, explanation: r.explanation, aliases: r.aliases.length ? r.aliases : undefined })));
+}
+
+export async function aiTranslate(restaurantId: string, texts: TranslateInput[], lang: string): Promise<Record<string, TranslateOutput>> {
+  if (!texts.length) return {};
+  const ai = client();
+  const glossary = await glossaryFor(restaurantId);
+  return friendly(() => translateMenu(ai, texts, lang, glossary));
+}
+
+/** Read a photo of a printed menu into CSV-like rows (Gemma vision): [category, name, description, price, diet, variants]. */
+export async function aiMenuFromImage(base64: string, mimeType: string): Promise<string[][]> {
+  const ai = client();
+  return friendly(() => readMenuImage(ai, base64, mimeType));
 }

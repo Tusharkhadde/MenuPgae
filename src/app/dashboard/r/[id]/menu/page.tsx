@@ -27,7 +27,7 @@ export default async function MenuPage({ params, searchParams }: { params: Promi
       itemLimit={limitsFor(plan).itemsPerRestaurant}
       plan={plan}
       happyHourAllowed={hasFeature(plan, "happyHour")}
-      aiAvailable={hasFeature(plan, "aiTools") && features.gemini()}
+      aiAvailable={hasFeature(plan, "aiTools") && features.ai()}
       initial={cats.map((c) => ({
         id: c.id,
         name: c.name,

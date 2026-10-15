@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { ArrowLeftIcon, Loader2Icon, SparklesIcon } from "lucide-react";
+import { ArrowLeftIcon, BookOpenIcon, Loader2Icon, SparklesIcon, TriangleAlertIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { SectionCard } from "@/components/dashboard/field";
 import { MENU_LANGUAGES, languageInfo, type Translations } from "@/lib/languages";
 import { autoTranslate, saveLanguages, saveTranslations } from "@/server/actions/growth";
 import type { PlanId } from "@/config/plans";
+import type { TranslateOutput } from "@/lib/ai/translate";
 import { cn } from "@/lib/utils";
 
 type Row = { id: string; name: string; description: string | null; translations: Translations };
@@ -31,6 +32,8 @@ export function TranslationsEditor(props: {
   const [dirty, setDirty] = useState(false);
   const [pending, start] = useTransition();
   const [aiBusy, setAiBusy] = useState(false);
+  /** Glossary post-check warnings from the last AI draft, keyed by "lang:id". */
+  const [flags, setFlags] = useState<Record<string, string[]>>({});
 
   const toggleLang = (code: string) => {
     const next = langs.includes(code) ? langs.filter((l) => l !== code) : [...langs, code];
@@ -73,7 +76,7 @@ export function TranslationsEditor(props: {
   const runAi = async () => {
     setAiBusy(true);
     const rows = cats.flatMap((c) => [c, ...c.items]).map((r) => ({ id: r.id, name: r.name, description: r.description }));
-    const out: Record<string, { name: string; description: string | null }> = {};
+    const out: Record<string, TranslateOutput> = {};
     for (let i = 0; i < rows.length; i += 80) {
       const res = await autoTranslate(props.restaurantId, active, rows.slice(i, i + 80));
       if (!res.ok) {
@@ -84,6 +87,12 @@ export function TranslationsEditor(props: {
       Object.assign(out, res.data);
     }
     setAiBusy(false);
+    const nextFlags: Record<string, string[]> = {};
+    for (const [id, t] of Object.entries(out)) {
+      const serious = (t.issues ?? []).filter((i) => i.kind !== "explanation_missing");
+      if (serious.length) nextFlags[`${active}:${id}`] = serious.map((i) => i.detail);
+    }
+    setFlags((prev) => ({ ...Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(`${active}:`))), ...nextFlags }));
     let filled = 0;
     setCats((prev) =>
       prev.map((c) => {
@@ -99,6 +108,8 @@ export function TranslationsEditor(props: {
     );
     setDirty(true);
     toast.success(`Drafted ${filled} translation${filled === 1 ? "" : "s"} — review, then save.`);
+    const flagged = Object.keys(nextFlags).length;
+    if (flagged) toast.warning(`${flagged} dish name${flagged === 1 ? "" : "s"} may have been translated literally — check the highlighted rows.`);
   };
 
   const info = active ? languageInfo(active) : null;
@@ -141,6 +152,9 @@ export function TranslationsEditor(props: {
               ))}
             </div>
             <div className="flex gap-2">
+              <Button asChild variant="ghost">
+                <Link href={`/dashboard/r/${props.restaurantId}/menu/translate/glossary`}><BookOpenIcon /> Dish glossary</Link>
+              </Button>
               {props.aiAvailable && (
                 <Button variant="outline" onClick={runAi} disabled={aiBusy || !active}>
                   {aiBusy ? <Loader2Icon className="animate-spin" /> : <SparklesIcon />} Draft with AI
@@ -155,10 +169,10 @@ export function TranslationsEditor(props: {
             <div className="space-y-6" dir={info?.rtl ? "rtl" : undefined}>
               {cats.map((c) => (
                 <div key={c.id} className="space-y-2">
-                  <TRow row={c} lang={active} onChange={(f, v) => setField("cat", c.id, f, v)} heading />
+                  <TRow row={c} lang={active} warnings={flags[`${active}:${c.id}`]} onChange={(f, v) => setField("cat", c.id, f, v)} heading />
                   <div className="space-y-2 border-s-2 ps-4">
                     {c.items.map((i) => (
-                      <TRow key={i.id} row={i} lang={active} onChange={(f, v) => setField("item", i.id, f, v)} />
+                      <TRow key={i.id} row={i} lang={active} warnings={flags[`${active}:${i.id}`]} onChange={(f, v) => setField("item", i.id, f, v)} />
                     ))}
                   </div>
                 </div>
@@ -171,7 +185,19 @@ export function TranslationsEditor(props: {
   );
 }
 
-function TRow({ row, lang, onChange, heading }: { row: Row; lang: string; onChange: (f: "name" | "description", v: string) => void; heading?: boolean }) {
+function TRow({
+  row,
+  lang,
+  onChange,
+  heading,
+  warnings,
+}: {
+  row: Row;
+  lang: string;
+  onChange: (f: "name" | "description", v: string) => void;
+  heading?: boolean;
+  warnings?: string[];
+}) {
   const t = row.translations[lang as keyof Translations];
   return (
     <div className="grid gap-2 sm:grid-cols-2">
@@ -181,9 +207,14 @@ function TRow({ row, lang, onChange, heading }: { row: Row; lang: string; onChan
       </div>
       <div className="space-y-1.5">
         <Input aria-label={`${row.name} in ${lang}`} value={t?.name ?? ""} placeholder={row.name} maxLength={100} onChange={(e) => onChange("name", e.target.value)} />
-        {row.description && (
-          <Textarea aria-label={`${row.name} description in ${lang}`} rows={2} value={t?.description ?? ""} placeholder={row.description} maxLength={400} onChange={(e) => onChange("description", e.target.value)} />
+        {(row.description || t?.description) && (
+          <Textarea aria-label={`${row.name} description in ${lang}`} rows={2} value={t?.description ?? ""} placeholder={row.description ?? ""} maxLength={400} onChange={(e) => onChange("description", e.target.value)} />
         )}
+        {warnings?.map((w) => (
+          <p key={w} className="flex items-start gap-1 text-xs text-amber-700 dark:text-amber-400">
+            <TriangleAlertIcon className="mt-0.5 size-3 shrink-0" /> {w}
+          </p>
+        ))}
       </div>
     </div>
   );

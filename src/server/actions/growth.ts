@@ -13,7 +13,8 @@ import { parsePriceToMinor } from "@/lib/money";
 import { getPlanForUser, requireRestaurantAccessOrThrow } from "@/server/session";
 import { revalidateRestaurant } from "@/server/revalidate";
 import { run, UserError, type ActionResult } from "@/server/actions/result";
-import { geminiTranslate } from "@/server/ai";
+import { aiTranslate } from "@/server/ai";
+import type { TranslateOutput } from "@/lib/ai/translate";
 
 const orderingSchema = z.object({
   ordersEnabled: z.boolean(),
@@ -183,17 +184,17 @@ export async function saveTranslations(restaurantId: string, input: unknown): Pr
   });
 }
 
-/** Optional: draft translations with Gemini (Pro + GEMINI_API_KEY). Nothing is saved until the owner reviews and saves. */
+/** Optional: draft translations with Gemma (Pro + an AI provider). Glossary-protected dish names are kept and post-checked. Nothing is saved until the owner reviews and saves. */
 export async function autoTranslate(
   restaurantId: string,
   lang: string,
   texts: { id: string; name: string; description: string | null }[],
-): Promise<ActionResult<Record<string, { name: string; description: string | null }>>> {
+): Promise<ActionResult<Record<string, TranslateOutput>>> {
   return run(async () => {
     const { restaurant } = await requireRestaurantAccessOrThrow(restaurantId, "manager");
     assertFeature(await getPlanForUser(restaurant.ownerId), "aiTools");
     if (!restaurant.languages.includes(lang)) throw new UserError("Turn that language on first.");
     const input = z.array(z.object({ id: z.string().max(64), name: z.string().max(100), description: z.string().max(400).nullable() })).max(400).parse(texts);
-    return geminiTranslate(input, lang);
+    return aiTranslate(restaurant.id, input, lang);
   });
 }

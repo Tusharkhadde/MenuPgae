@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { resolveAiConfig, type AiConfig } from "@/lib/ai/config";
 
 /**
  * Environment access. Validation is lazy (on first use at runtime) so that
@@ -33,8 +34,22 @@ const schema = z.object({
   VERCEL_TEAM_ID: optional,
   PRO_EMAILS: optional,
   CUSTOM_DOMAIN_TARGET: optional,
+  // Open-weight AI (Gemma). GEMINI_* are accepted as legacy aliases.
+  AI_PROVIDER: optional,
+  GOOGLE_AI_API_KEY: optional,
   GEMINI_API_KEY: optional,
+  GEMMA_MODEL: optional,
+  GEMMA_VISION_MODEL: optional,
+  GEMMA_FALLBACK_MODEL: optional,
   GEMINI_MODEL: optional,
+  OLLAMA_BASE_URL: optional,
+  OPENAI_COMPAT_BASE_URL: optional,
+  OPENAI_COMPAT_API_KEY: optional,
+  OLLAMA_MODEL: optional,
+  OLLAMA_VISION_MODEL: optional,
+  // TabPFN prep-planner agent (Python service in /agent, e.g. on Render)
+  AGENT_URL: optional,
+  AGENT_SECRET: optional,
   CRON_SECRET: optional,
 });
 
@@ -84,9 +99,15 @@ export const features = {
   vercelDomains: () => !!(env().VERCEL_API_TOKEN && env().VERCEL_PROJECT_ID),
   /** Transactional email (reservation alerts, team invites, weekly digest). Sign-in links use the same key. */
   resend: () => !!env().AUTH_RESEND_KEY,
-  /** Optional AI helpers (auto-translate, menu photo import). */
-  gemini: () => !!env().GEMINI_API_KEY,
+  /** Optional AI helpers (auto-translate, menu photo import) on Gemma — Google AI Studio or a local Ollama. */
+  ai: () => aiConfig() !== null,
+  /** TabPFN prep-planner agent. */
+  prepAgent: () => !!(env().AGENT_URL && env().AGENT_SECRET),
 };
+
+export function aiConfig(): AiConfig | null {
+  return resolveAiConfig(env());
+}
 
 export function proEmailAllowlist(): Set<string> {
   return new Set(
