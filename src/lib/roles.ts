@@ -9,7 +9,7 @@ export function roleAtLeast(role: AccessRole, min: AccessRole): boolean {
 /** Dashboard tabs each role can see. */
 export function tabsForRole(role: AccessRole): string[] {
   const staff = ["orders"];
-  const manager = ["overview", "orders", "menu", "qr", "engage", "analytics"];
+  const manager = ["overview", "orders", "menu", "qr", "engage", "analytics", "insights"];
   const owner = [...manager, "details", "design", "growth", "team", "settings"];
   return role === "owner" ? owner : role === "manager" ? manager : staff;
 }

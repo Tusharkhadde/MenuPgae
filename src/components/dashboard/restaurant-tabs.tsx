@@ -14,6 +14,7 @@ const TABS = [
   ["design", "Design", "/design"],
   ["qr", "QR & sharing", "/qr"],
   ["analytics", "Analytics", "/analytics"],
+  ["insights", "Prep planner", "/insights/prep"],
   ["team", "Team", "/team"],
   ["settings", "Settings", "/settings"],
 ] as const;
