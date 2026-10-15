@@ -1,0 +1,9 @@
+# MenuPage prep agent — TabPFN forecasting + Gemma wording
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30
+httpx>=0.27
+pydantic>=2.7,<3
+pandas>=2.2
+numpy>=1.26
+# Official Prior Labs client (TabPFN via API). Auth: PRIORLABS_API_KEY or TABPFN_TOKEN.
+tabpfn-client>=0.2
