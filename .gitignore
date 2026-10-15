@@ -43,3 +43,9 @@ next-env.d.ts
 # local data (embedded dev database, local uploads)
 /.data
 !.env.example
+
+# Python agent
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/

@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 const fmtDay = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 const n0 = (v: number) => Math.round(v).toLocaleString("en-IN");
 
-export function PrepPlanner(props: { restaurantId: string; currency: string; orderCount: number; orderDays: number; minDays: number; syntheticOnly: boolean }) {
+export function PrepPlanner(props: { restaurantId: string; orderCount: number; orderDays: number; minDays: number; syntheticOnly: boolean }) {
   const enoughData = props.orderDays >= props.minDays;
   const [source, setSource] = useState<"orders" | "synthetic">(props.syntheticOnly || !enoughData ? "synthetic" : "orders");
   const [horizon, setHorizon] = useState(3);
@@ -79,7 +79,7 @@ export function PrepPlanner(props: { restaurantId: string; currency: string; ord
             </div>
           )}
 
-          <SectionCard title="Prep list" description={plan.prep.summary}>
+          <SectionCard title={`Prep list · ${fmtDay(plan.prep.date)}`} description={plan.prep.summary}>
             <ul className="divide-y rounded-xl border">
               {plan.prep.items.map((it) => (
                 <li key={it.item} className="flex items-start justify-between gap-3 p-3 text-sm">

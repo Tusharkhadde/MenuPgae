@@ -65,7 +65,6 @@ export default async function PrepPage({ params }: { params: Promise<{ id: strin
   return (
     <PrepPlanner
       restaurantId={restaurant.id}
-      currency={restaurant.currency}
       orderCount={n}
       orderDays={days.length}
       minDays={MIN_HISTORY_DAYS}

@@ -29,6 +29,8 @@ export type PrepPlan = {
   risk: RiskItem[];
   prep: {
     source: "gemma" | "template";
+    /** The day the prep list is for (first forecast day). */
+    date: string;
     summary: string;
     items: { item: string; quantity: number; note: string | null }[];
     risk_notes: { item: string; note: string }[];
