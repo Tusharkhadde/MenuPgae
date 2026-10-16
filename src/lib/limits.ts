@@ -84,6 +84,7 @@ const FEATURE_MESSAGES: Record<BooleanFeature, string> = {
   reservations: "Table reservations are a Pro feature.",
   weeklyDigest: "The weekly digest is a Pro feature.",
   aiTools: "AI tools are a Pro feature.",
+  prepPlanner: "The prep planner is a Pro feature.",
 };
 
 export function hasFeature(plan: PlanId, feature: BooleanFeature): boolean {

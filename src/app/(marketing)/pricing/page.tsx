@@ -61,7 +61,7 @@ export default function PricingPage() {
           </tbody>
         </table>
       </div>
-      <p className="mx-auto mt-3 max-w-3xl text-xs text-muted-foreground">* AI tools are available when the server has a Google Gemini API key configured.</p>
+      <p className="mx-auto mt-3 max-w-3xl text-xs text-muted-foreground">* AI tools run on open-weight Gemma models and are available when the server has an AI provider configured (Google AI Studio or a self-hosted Ollama).</p>
       <div className="mt-20">
         <h2 className="mb-8 text-center text-2xl font-semibold tracking-tight">FAQ</h2>
         <Faq />

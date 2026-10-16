@@ -25,7 +25,7 @@ export default async function TranslatePage({ params }: { params: Promise<{ id: 
       languages={restaurant.languages}
       maxLanguages={limitsFor(plan).extraLanguages}
       plan={plan}
-      aiAvailable={hasFeature(plan, "aiTools") && features.gemini()}
+      aiAvailable={hasFeature(plan, "aiTools") && features.ai()}
       categories={cats.map((c) => ({
         id: c.id,
         name: c.name,

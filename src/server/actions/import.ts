@@ -9,7 +9,7 @@ import { assertCanAddCategory, assertCanAddItems, assertFeature, limitsFor } fro
 import { getPlanForUser, requireRestaurantAccessOrThrow } from "@/server/session";
 import { revalidateRestaurant } from "@/server/revalidate";
 import { run, UserError, type ActionResult } from "@/server/actions/result";
-import { geminiMenuFromImage } from "@/server/ai";
+import { aiMenuFromImage } from "@/server/ai";
 import { rateLimit } from "@/lib/rate-limit";
 
 /** Import menu rows from CSV text (parsed again on the server — the browser preview is just a preview). */
@@ -70,7 +70,7 @@ export async function importMenuCsv(restaurantId: string, csvText: string): Prom
   });
 }
 
-/** Optional AI import: read a menu photo into CSV text for review (Pro + GEMINI_API_KEY). */
+/** Optional AI import: read a menu photo into CSV text for review (Pro + Gemma vision). */
 export async function readMenuPhoto(restaurantId: string, base64: string, mimeType: string): Promise<ActionResult<{ csv: string }>> {
   return run(async () => {
     const { user, restaurant } = await requireRestaurantAccessOrThrow(restaurantId, "manager");
@@ -78,7 +78,7 @@ export async function readMenuPhoto(restaurantId: string, base64: string, mimeTy
     if (!["image/jpeg", "image/png", "image/webp"].includes(mimeType)) throw new UserError("Use a JPG, PNG or WebP photo.");
     if (typeof base64 !== "string" || base64.length > 6_000_000) throw new UserError("The photo is too large (4 MB max).");
     if (!rateLimit(`ai-photo:${user.id}`, 10, 60 * 60_000).ok) throw new UserError("Too many photo imports this hour. Try again later.");
-    const rows = await geminiMenuFromImage(base64, mimeType);
+    const rows = await aiMenuFromImage(base64, mimeType);
     if (rows.length < 2) throw new UserError("No dishes could be read from that photo. Try a sharper, straight-on photo.");
     const esc = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
     return { csv: rows.map((r) => r.map(esc).join(",")).join("\n") };

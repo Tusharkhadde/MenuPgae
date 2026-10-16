@@ -1,0 +1,32 @@
+# Render Blueprint — MenuPage prep agent (TabPFN forecast + Gemma prep list).
+# Only the Python agent runs on Render; the Next.js app stays on Vercel.
+# New → Blueprint → pick this repo. Free plan: the instance sleeps when idle (first call can take ~1 min).
+services:
+  - type: web
+    name: menupage-prep-agent
+    runtime: python
+    plan: free
+    region: singapore # closest Render region to India; change if your restaurants are elsewhere
+    rootDir: agent
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    buildFilter:
+      paths:
+        - agent/**
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      # Shared secret — copy the generated value into Vercel as AGENT_SECRET.
+      - key: AGENT_SECRET
+        generateValue: true
+      # TabPFN API token from https://platform.priorlabs.ai/account/api-keys
+      - key: PRIORLABS_API_KEY
+        sync: false
+      # Gemma via Google AI Studio (https://aistudio.google.com/apikey). Optional: without it the
+      # prep notes use a plain template and the response says so.
+      - key: GOOGLE_AI_API_KEY
+        sync: false
+      - key: GEMMA_MODEL
+        value: gemma-3-27b-it

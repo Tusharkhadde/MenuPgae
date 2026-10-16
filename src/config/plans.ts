@@ -40,8 +40,10 @@ export type PlanLimits = {
   teamMembers: number;
   /** Weekly email digest. */
   weeklyDigest: boolean;
-  /** Optional AI helpers (auto-translate, menu photo import) — need GEMINI_API_KEY. */
+  /** Optional AI helpers on Gemma (auto-translate with dish glossary, menu photo import) — need an AI provider. */
   aiTools: boolean;
+  /** Prep planner: TabPFN demand forecast + Gemma prep list — needs the /agent service (AGENT_URL). */
+  prepPlanner: boolean;
 };
 
 export type Plan = {
@@ -74,6 +76,7 @@ export const PLANS: Record<PlanId, Plan> = {
       teamMembers: 0,
       weeklyDigest: false,
       aiTools: false,
+      prepPlanner: false,
     },
     features: [
       "1 restaurant",
@@ -110,6 +113,7 @@ export const PLANS: Record<PlanId, Plan> = {
       teamMembers: 10,
       weeklyDigest: true,
       aiTools: true,
+      prepPlanner: true,
     },
     features: [
       "Up to 10 restaurants / branches",
@@ -123,6 +127,8 @@ export const PLANS: Record<PlanId, Plan> = {
       "Menu in up to 6 extra languages",
       "Team members (manager / staff)",
       "Weekly email digest",
+      "AI tools on open Gemma models: menu translation with dish glossary, photo import",
+      "Prep planner: next-week dish forecast (TabPFN) + kitchen prep list",
       "Everything in Free",
     ],
   },

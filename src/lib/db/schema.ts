@@ -379,6 +379,25 @@ export const teamMembers = pgTable(
   (t) => [uniqueIndex("team_members_restaurant_email_idx").on(t.restaurantId, t.email), index("team_members_email_idx").on(t.email)],
 );
 
+/**
+ * Restaurant-specific dish glossary: protected dish names (+ spellings) and a short explanation.
+ * Merged over the built-in list in src/lib/glossary/dishes.ts for AI translation and its post-check.
+ */
+export const glossaryEntries = pgTable(
+  "glossary_entries",
+  {
+    id: id(),
+    restaurantId: text("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    term: text("term").notNull(),
+    aliases: text("aliases").array().notNull().default([]),
+    explanation: text("explanation").notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("glossary_entries_restaurant_term_idx").on(t.restaurantId, t.term)],
+);
+
 export type User = typeof users.$inferSelect;
 export type Restaurant = typeof restaurants.$inferSelect;
 export type Category = typeof categories.$inferSelect;
@@ -388,3 +407,4 @@ export type Order = typeof orders.$inferSelect;
 export type Reservation = typeof reservations.$inferSelect;
 export type Coupon = typeof coupons.$inferSelect;
 export type TeamMember = typeof teamMembers.$inferSelect;
+export type GlossaryEntryRow = typeof glossaryEntries.$inferSelect;
