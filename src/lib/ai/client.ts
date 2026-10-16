@@ -72,8 +72,29 @@ export function buildOpenAiCompatRequest(endpoint: string, apiKey: string | null
   };
 }
 
-type GoogleResponse = { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] };
-type OpenAiResponse = { choices?: { message?: { content?: string | { type?: string; text?: string }[] | null } }[] };
+type GoogleResponse = {
+  candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[];
+  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number };
+};
+type OpenAiResponse = {
+  choices?: { message?: { content?: string | { type?: string; text?: string }[] | null } }[];
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
+};
+
+/** Token counts as reported by the provider (output includes thinking tokens, which are billed as output). */
+export type AiUsage = { inputTokens: number; outputTokens: number };
+
+export function usageFromGoogle(data: GoogleResponse): AiUsage | null {
+  const u = data.usageMetadata;
+  if (!u || typeof u.promptTokenCount !== "number") return null;
+  return { inputTokens: u.promptTokenCount, outputTokens: (u.candidatesTokenCount ?? 0) + (u.thoughtsTokenCount ?? 0) };
+}
+
+export function usageFromOpenAi(data: OpenAiResponse): AiUsage | null {
+  const u = data.usage;
+  if (!u || typeof u.prompt_tokens !== "number") return null;
+  return { inputTokens: u.prompt_tokens, outputTokens: u.completion_tokens ?? 0 };
+}
 
 /** Join the answer text, skipping "thought" parts that thinking-capable models may return. */
 export function textFromGoogle(data: GoogleResponse): string {
@@ -106,14 +127,18 @@ export type AiClient = {
   config: AiConfig;
   /** The model that actually answered last (differs from config when the Google fallback kicked in). */
   lastModel: () => string;
+  /** Token usage of the last call, when the provider reported it. */
+  lastUsage: () => AiUsage | null;
   generateText: (req: AiRequest) => Promise<string>;
   generateJson: <T = unknown>(req: AiRequest) => Promise<T>;
 };
 
 export function createAiClient(config: AiConfig, fetchImpl: FetchLike = fetch): AiClient {
   let last = config.model;
+  let usage: AiUsage | null = null;
 
   async function generateText(req: AiRequest): Promise<string> {
+    usage = null;
     const timeout = req.timeoutMs ?? 60_000;
     if (config.provider === "google") {
       const primary = req.image ? config.visionModel : config.model;
@@ -126,7 +151,9 @@ export function createAiClient(config: AiConfig, fetchImpl: FetchLike = fetch): 
         }
         if (!res.ok) await failFor(res, "Google AI Studio");
         last = models[i];
-        const text = textFromGoogle((await res.json()) as GoogleResponse);
+        const data = (await res.json()) as GoogleResponse;
+        usage = usageFromGoogle(data);
+        const text = textFromGoogle(data);
         if (!text.trim()) throw new AiError("empty", "The AI returned an empty answer.");
         return text;
       }
@@ -136,7 +163,9 @@ export function createAiClient(config: AiConfig, fetchImpl: FetchLike = fetch): 
     const res = await send(fetchImpl, buildOpenAiCompatRequest(config.endpoint, config.apiKey, model, req), timeout);
     if (!res.ok) await failFor(res, "Local model server");
     last = model;
-    const text = textFromOpenAi((await res.json()) as OpenAiResponse);
+    const data = (await res.json()) as OpenAiResponse;
+    usage = usageFromOpenAi(data);
+    const text = textFromOpenAi(data);
     if (!text.trim()) throw new AiError("empty", "The AI returned an empty answer.");
     return text;
   }
@@ -144,6 +173,7 @@ export function createAiClient(config: AiConfig, fetchImpl: FetchLike = fetch): 
   return {
     config,
     lastModel: () => last,
+    lastUsage: () => usage,
     generateText,
     async generateJson<T>(req: AiRequest): Promise<T> {
       const text = await generateText(req);

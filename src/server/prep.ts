@@ -5,9 +5,11 @@ import { getDb } from "@/lib/db";
 import { categories, items, orders, type Restaurant } from "@/lib/db/schema";
 import { minorDigits } from "@/lib/money";
 import { localDate } from "@/lib/schedule";
+import { festivalPayload, festivalsBetween } from "@/lib/prep/festivals";
 import { addDays, holidaysBetween, ordersToHistory, tomorrowLocal, type HistoryRow } from "@/lib/prep/history";
 import { generateSyntheticHistory } from "@/lib/prep/synthetic";
-import type { PrepPlan, PrepRequest } from "@/lib/prep/types";
+import type { AskResult, BacktestResult, HistoryPayload, PrepPlan, PrepRequest } from "@/lib/prep/types";
+import { withAgentSpan } from "@/lib/observability";
 import { UserError } from "@/server/actions/result";
 
 const HISTORY_DAYS = 90;
@@ -52,27 +54,48 @@ export async function syntheticHistory(restaurant: Restaurant): Promise<HistoryR
     days: SYNTHETIC_DAYS,
     endDate: end,
     seed: [...restaurant.id].reduce((a, c) => a + c.charCodeAt(0), 0),
-    holidays: holidaysBetween(addDays(end, -SYNTHETIC_DAYS), end),
+    // Synthetic demo bump on fixed holidays and the movable festivals (Diwali, Ganesh Chaturthi, …).
+    holidays: [...holidaysBetween(addDays(end, -SYNTHETIC_DAYS), end), ...festivalsBetween(addDays(end, -SYNTHETIC_DAYS), end).map((f) => f.date)],
   });
 }
 
-export function buildPrepRequest(restaurant: Restaurant, history: HistoryRow[], horizonDays: number, synthetic: boolean): PrepRequest {
-  const start = tomorrowLocal(restaurant.timezone);
-  const first = history[0]?.date ?? start;
+/** History + calendar features for any agent endpoint. Festivals run 30 days past `until` so days-to-festival is right. */
+export function buildHistoryPayload(restaurant: Restaurant, history: HistoryRow[], until: string, synthetic: boolean): HistoryPayload {
+  const first = history[0]?.date ?? until;
   return {
     restaurant: { name: restaurant.name, timezone: restaurant.timezone, currency: restaurant.currency },
     history,
-    holidays: holidaysBetween(first, addDays(start, horizonDays)),
-    start_date: start,
-    horizon_days: horizonDays,
+    holidays: holidaysBetween(first, until),
+    festivals: festivalPayload(first, addDays(until, 31)),
     synthetic,
   };
 }
 
-/** Call the Python agent. Render free instances sleep when idle, so the first call can take ~a minute. */
+export function buildPrepRequest(restaurant: Restaurant, history: HistoryRow[], horizonDays: number, synthetic: boolean): PrepRequest {
+  const start = tomorrowLocal(restaurant.timezone);
+  return { ...buildHistoryPayload(restaurant, history, addDays(start, horizonDays), synthetic), start_date: start, horizon_days: horizonDays };
+}
+
 export async function callPrepAgent(req: PrepRequest): Promise<PrepPlan> {
+  return callAgent<PrepPlan>("/v1/prep-plan", req, "prep-plan");
+}
+
+export async function callBacktestAgent(req: HistoryPayload & { holdout_days: number }): Promise<BacktestResult> {
+  return callAgent<BacktestResult>("/v1/backtest", req, "backtest");
+}
+
+export async function callAskAgent(req: HistoryPayload & { question: string; today: string }): Promise<AskResult> {
+  return callAgent<AskResult>("/v1/ask", req, "ask");
+}
+
+/** Call the Python agent. Render free instances sleep when idle, so the first call can take ~a minute. */
+async function callAgent<T>(path: string, body: unknown, task: string): Promise<T> {
+  return withAgentSpan(task, () => postAgent<T>(path, body));
+}
+
+async function postAgent<T>(path: string, req: unknown): Promise<T> {
   if (!features.prepAgent()) throw new UserError("The prep planner isn't set up on this server (AGENT_URL / AGENT_SECRET).");
-  const url = `${env().AGENT_URL!.replace(/\/+$/, "")}/v1/prep-plan`;
+  const url = `${env().AGENT_URL!.replace(/\/+$/, "")}${path}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${env().AGENT_SECRET}` },
@@ -94,5 +117,5 @@ export async function callPrepAgent(req: PrepRequest): Promise<PrepPlan> {
     }
     throw new UserError(detail ? `Prep agent: ${detail}` : "The prep agent returned an error. Try again later.");
   }
-  return (await res.json()) as PrepPlan;
+  return (await res.json()) as T;
 }

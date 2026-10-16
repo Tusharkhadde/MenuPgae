@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Field, SectionCard } from "@/components/dashboard/field";
+import { AskPlanner } from "@/components/dashboard/ask-planner";
+import { ForecastAccuracy } from "@/components/dashboard/forecast-accuracy";
 import { generatePrepPlan } from "@/server/actions/prep";
 import type { PrepPlan } from "@/lib/prep/types";
 import { cn } from "@/lib/utils";
@@ -67,6 +69,8 @@ export function PrepPlanner(props: { restaurantId: string; orderCount: number; o
         {props.syntheticOnly && <p className="text-xs text-muted-foreground">Demo account: the planner runs on synthetic data only. Pro restaurants use their real orders.</p>}
         {pending && <p className="text-xs text-muted-foreground">The first run can take up to a minute while the forecasting agent wakes up.</p>}
       </SectionCard>
+
+      <AskPlanner restaurantId={props.restaurantId} source={source} canUseOrders={!props.syntheticOnly && enoughData} />
 
       {plan && (
         <>
@@ -192,6 +196,8 @@ export function PrepPlanner(props: { restaurantId: string; orderCount: number; o
           )}
         </>
       )}
+
+      <ForecastAccuracy restaurantId={props.restaurantId} source={source} canUseOrders={!props.syntheticOnly && props.orderDays >= 28} />
     </div>
   );
 }
