@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { PLANS, PRO_PRICE_LABELS, isPlanId } from "@/config/plans";
+import { PLANS, PRO_PRICE_NOTE, isPlanId } from "@/config/plans";
+import * as plans from "@/config/plans";
 import {
   LimitError,
   analyticsSince,
@@ -23,10 +24,10 @@ describe("plans config", () => {
     expect(PLANS.pro.limits).toMatchObject({ analyticsDays: 90, customDomain: true, removeBadge: true });
   });
 
-  it("has placeholder price labels for INR and USD", () => {
-    expect(PRO_PRICE_LABELS.INR.monthly).toBe("₹299");
-    expect(PRO_PRICE_LABELS.USD.monthly).toBe("$5");
-    for (const p of Object.values(PRO_PRICE_LABELS)) expect(p.note).toMatch(/placeholder/);
+  it("shows no invented Pro price: the checkout (Dodo product) is the only source of the amount", () => {
+    expect("PRO_PRICE_LABELS" in plans).toBe(false);
+    expect(PRO_PRICE_NOTE).toMatch(/checkout/i);
+    expect(PRO_PRICE_NOTE).not.toMatch(/[₹$€£]\s?\d|\d+\s?(AED|S\$)/);
   });
 
   it("validates plan ids", () => {

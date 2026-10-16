@@ -166,7 +166,7 @@ export function MenuEditor(props: {
     startTransition(async () => {
       const res = await addSampleMenu(props.restaurantId);
       if (!res.ok) toast.error(res.error);
-      else toast.success("Sample menu added — edit it to make it yours.");
+      else toast.success("Example menu added. These dishes and prices aren't yours — edit or delete them before you share your menu.");
       refresh();
     });
   }

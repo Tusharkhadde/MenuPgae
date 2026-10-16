@@ -2,9 +2,9 @@
  * ─────────────────────────────────────────────────────────────────────────────
  *  PLANS & PRICES — the single place to change them.
  *
- *  ⚠️  PRICES BELOW ARE PLACEHOLDERS. Set your real prices here AND on the
- *      matching Dodo Payments product (the amount actually charged is whatever
- *      the Dodo product says; these strings are display labels only).
+ *  Prices are NOT hard-coded: the amount charged is whatever the Dodo Payments
+ *  Pro product (DODO_PRODUCT_PRO) is set to, and the checkout shows it before
+ *  the owner pays. Don't add a display price here unless it matches that product.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -134,21 +134,8 @@ export const PLANS: Record<PlanId, Plan> = {
   },
 };
 
-/**
- * Display prices for Pro, per currency. PLACEHOLDERS — edit freely.
- * Shown on the pricing page; the visitor can switch currency.
- */
-export const PRO_PRICE_LABELS = {
-  INR: { monthly: "₹299", note: "per month · placeholder price" },
-  USD: { monthly: "$5", note: "per month · placeholder price" },
-  EUR: { monthly: "€5", note: "per month · placeholder price" },
-  GBP: { monthly: "£4", note: "per month · placeholder price" },
-  AED: { monthly: "AED 19", note: "per month · placeholder price" },
-  SGD: { monthly: "S$7", note: "per month · placeholder price" },
-} as const;
-
-export type PriceCurrency = keyof typeof PRO_PRICE_LABELS;
-export const PRICE_CURRENCIES = Object.keys(PRO_PRICE_LABELS) as PriceCurrency[];
+/** Shown wherever Pro is offered. Honest about pricing: no number until it matches the Dodo product. */
+export const PRO_PRICE_NOTE = "Pro is in early access. Its monthly price is shown on the secure Dodo Payments checkout before you pay — cancel anytime.";
 
 export function isPlanId(v: unknown): v is PlanId {
   return v === "free" || v === "pro";

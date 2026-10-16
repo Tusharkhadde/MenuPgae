@@ -2,7 +2,7 @@ import { CheckIcon, InfoIcon } from "lucide-react";
 import { requireUser, getBillingState, getPlanForUser } from "@/server/session";
 import { billingConfig } from "@/server/billing";
 import { hasLiveSubscription } from "@/lib/billing/state";
-import { PLANS, PRO_PRICE_LABELS } from "@/config/plans";
+import { PLANS, PRO_PRICE_NOTE } from "@/config/plans";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -71,11 +71,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
               <p className="text-lg font-semibold">Upgrade to Pro</p>
               <p className="mt-1 text-sm text-muted-foreground">{PLANS.pro.tagline}</p>
             </div>
-            <p className="text-right">
-              <span className="text-2xl font-semibold">{PRO_PRICE_LABELS.INR.monthly}</span>
-              <span className="text-sm text-muted-foreground"> / month</span>
-              <span className="block text-xs text-muted-foreground">or {PRO_PRICE_LABELS.USD.monthly}/month · placeholder pricing</span>
-            </p>
+            <p className="max-w-xs text-right text-xs text-muted-foreground">{PRO_PRICE_NOTE}</p>
           </div>
           <ul className="mt-5 grid gap-2 sm:grid-cols-2">
             {PLANS.pro.features.map((f) => (

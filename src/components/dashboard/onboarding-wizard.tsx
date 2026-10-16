@@ -34,7 +34,7 @@ export function OnboardingWizard({ appHost }: { appHost: string }) {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [whatsapp, setWhatsapp] = useState("");
-  const [sampleMenu, setSampleMenu] = useState(true);
+  const [sampleMenu, setSampleMenu] = useState(false);
   const timezones = useMemo(() => allTimezones(), []);
 
   useEffect(() => {
@@ -156,7 +156,7 @@ export function OnboardingWizard({ appHost }: { appHost: string }) {
             <div className="flex items-start justify-between gap-4 rounded-xl border p-4">
               <div>
                 <p className="text-sm font-medium">Start with a sample menu</p>
-                <p className="text-xs text-muted-foreground">We&apos;ll add example categories and dishes you can edit or delete.</p>
+                <p className="text-xs text-muted-foreground">Adds example dishes and prices (not yours) so you can see how it looks. Replace or delete them before you share your menu.</p>
               </div>
               <Switch checked={sampleMenu} onCheckedChange={setSampleMenu} aria-label="Start with a sample menu" />
             </div>
