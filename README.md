@@ -3,7 +3,7 @@
 **QR menu + one-page website for restaurants, cafés and small food vendors.**
 Owners build their menu in a dashboard, print table QR codes, and guests order on WhatsApp — no app, no commission. Multi-currency (₹, $, €, £, AED, S$ …), mobile-first, SEO-ready, and designed to run on free tiers.
 
-- **Stack:** Next.js 16 (App Router, TypeScript strict) · Tailwind CSS v4 + shadcn/ui · Postgres (Neon) + Drizzle ORM · Auth.js v5 (Google, email magic links via Resend, demo sandbox) · Cloudflare R2 uploads · Dodo Payments billing · Zod · Vitest · GitHub Actions
+- **Stack:** Next.js 16 (App Router, TypeScript strict) · Tailwind CSS v4 + shadcn/ui · Postgres (Neon) + Drizzle ORM · Auth.js v5 (Google, email magic links via Resend; optional hidden judge demo) · Cloudflare R2 uploads · Dodo Payments billing · Zod · Vitest · GitHub Actions
 - **Cost to run:** $0 on Vercel Hobby + Neon Free + Cloudflare R2 Free + Resend Free + Dodo (pay-per-transaction only).
 
 ---
@@ -30,7 +30,7 @@ Owners build their menu in a dashboard, print table QR codes, and guests order o
 | **Reservations** (Pro) | Guest request form (date, time, party size) → dashboard + email alert (Resend) → accept/decline, guest emailed + one-tap WhatsApp reply |
 | **Multi-language menus** | Owner-entered translations per item/category, language switcher, RTL for Arabic. 1 extra language on Free, 6 on Pro. Optional AI drafts on Pro with open **Gemma** models (Google AI Studio or local Ollama) and a curated **dish glossary** that keeps names like *Misal Pav* intact and flags literal translations |
 | **Menu import** | CSV (Excel/Sheets export) with template + preview + per-line errors. Optional AI import from a menu photo (Gemma vision, Pro) |
-| **Prep planner** (Pro) | Per-dish portion forecast for the next 1–7 days from your own orders (**TabPFN**, a tabular foundation model), unusual-day detection, "86 risk", and a plain-language prep list written by **Gemma**. Runs as a small Python agent on Render's free plan; synthetic demo data (clearly labelled) when there aren't enough orders yet. Festival-aware (Diwali, Ganesh Chaturthi, Eid …), a **Forecast accuracy** backtest against naive baselines, and **Ask the planner** ("how much paneer for Saturday?") |
+| **Prep planner** (Pro) | Per-dish portion forecast for the next 1–7 days from your own orders (**TabPFN**, a tabular foundation model), unusual-day detection, "86 risk", and a plain-language prep list written by **Gemma**. Runs as a small Python agent on Render's free plan. Uses only the restaurant's real orders; until there are enough it shows progress toward 28 days ("Needs N more days of orders"), never sample data. Festival-aware (Diwali, Ganesh Chaturthi, Eid …), a **Forecast accuracy** backtest against naive baselines, and **Ask the planner** ("how much paneer for Saturday?") |
 | **Team** (Pro) | Invite by email as manager (menu, orders, guests, QR, analytics) or staff (orders only). Enforced server-side |
 | **Share** | Installable PWA with offline menu, iframe embed snippet for existing websites (`/embed/{slug}`), link-in-bio page (`/l/{slug}`), printable branded A4 menu, calories + nutrition |
 | **Weekly digest** (Pro) | Monday email with views, orders, sales, top dishes, ratings and pending reservations (Vercel Cron + Resend; skipped without keys) |
@@ -38,10 +38,14 @@ Owners build their menu in a dashboard, print table QR codes, and guests order o
 | **Plans** | Free (1 restaurant, 50 items, badge, 7-day analytics/order history, 1 extra language) and Pro (10 branches, 1,000 items, custom domain, no badge, 90 days, kitchen display, coupons, happy hour, reservations, 6 languages, team, digest, AI tools) — enforced server-side; downgrade pauses extras, never deletes |
 | **Billing** | Dodo Payments checkout, Standard-Webhooks signature verification, idempotent + out-of-order-safe webhook processing, customer portal. Fully optional |
 | **Custom domains** | Pro feature. Optional automatic setup through the Vercel Domains API; DNS instructions in the dashboard |
-| **Marketing site** | Landing page, pricing (currency switch), FAQ, live demo restaurant (`/r/demo`), terms & privacy placeholders, light + dark mode |
+| **Marketing site** | Landing page, pricing (no invented prices — Pro's price is shown at checkout), FAQ, terms & privacy placeholders, light + dark mode |
 | **Security** | Owner-only authorization on every mutation, Zod validation, rate limits on public endpoints, image magic-byte sniffing + 4 MB limit (client-side resize to WebP first), reserved slugs, same-origin checks, security headers, runtime env validation |
 
-> No fake testimonials, logos, user counts or metrics anywhere — by design.
+> No fake testimonials, logos, user counts, ratings, prices or metrics anywhere — by design. The phone mockup and the WhatsApp message on the landing page are captioned "Illustrative example — not a real restaurant".
+
+### Real data only (and the hidden judge demo)
+- Real accounts **never** see synthetic data. The prep planner, forecast accuracy and Ask the planner use only the restaurant's own orders. The data source is chosen on the server from the signed-in account (`historySourceFor` in `src/lib/prep/readiness.ts`), never from the browser. Until there is enough history the page shows an honest progress state ("Needs N more days of orders", progress toward 28 days: day 14 unlocks the prep plan and Ask the planner, day 28 forecast accuracy).
+- The **judge demo** is off unless `DEMO_LOGIN_ENABLED=true`. It lives only at the unlinked route **`/demo`** (noindex, disallowed in robots.txt) and creates a 24-hour sandbox with a fictional café. That café and its synthetic order history are labelled **"Demo data"** everywhere they appear (dashboard banner, public menu banner, restaurant name, prep planner, forecast accuracy, Ask the planner). With the flag off, `/demo` and every demo restaurant page (including `/r/demo`) return 404.
 
 ---
 
@@ -51,18 +55,20 @@ Owners build their menu in a dashboard, print table QR codes, and guests order o
 git clone https://github.com/Tusharkhadde/MenuPgae.git menupage
 cd menupage
 npm install
-npm run db:seed     # creates the embedded dev DB + the /r/demo restaurant
-npm run dev         # http://localhost:3000
+npm run db:seed     # optional: creates the embedded dev DB + the fictional /r/demo restaurant ("Demo data")
+DEMO_LOGIN_ENABLED=true npm run dev   # http://localhost:3000 (drop the flag to test with demo off)
 ```
 
 With no environment variables at all:
 - the database is an embedded Postgres (**PGlite**) stored in `.data/pglite` (migrations run automatically),
 - "Email me a sign-in link" prints the magic link to the **terminal**,
-- "Try the dashboard with a demo account" creates a private sandbox,
+- with `DEMO_LOGIN_ENABLED=true`, `/demo` creates a private demo sandbox (labelled "Demo data"); without it the demo is off,
 - uploads go to `.data/uploads`,
 - billing shows "not configured".
 
 To use a real Postgres locally, copy `.env.example` → `.env.local` and set `DATABASE_URL`, then `npm run db:migrate && npm run db:seed`.
+
+These fallbacks are **development only**. In production (`NODE_ENV=production`, i.e. `next start` / Vercel) the server refuses to start and logs one clear list of what's missing if `DATABASE_URL`, `AUTH_SECRET` or a real sign-in method (Google, or Resend + `EMAIL_FROM`) is absent — it never uses PGlite, never prints magic links to the console, and the demo login doesn't count as a sign-in method. `next build` still needs no secrets.
 
 ### Scripts
 
@@ -73,7 +79,7 @@ To use a real Postgres locally, copy `.env.example` → `.env.local` and set `DA
 | `npm run check` | All four in a row |
 | `npm run db:generate` | Generate a migration after editing `src/lib/db/schema.ts` |
 | `npm run db:migrate` | Apply migrations (`DATABASE_URL_UNPOOLED` or `DATABASE_URL`) |
-| `npm run db:seed` | Migrate + (re)create the public demo restaurant at `/r/demo` |
+| `npm run db:seed` | Dev/CI only: migrate + (re)create the fictional demo restaurant at `/r/demo`. Refuses to run with `NODE_ENV=production`, on Vercel, or against a database that has real accounts |
 | `npm run db:studio` | Drizzle Studio |
 | `npm run eval:translate` | Score dish-name preservation of the configured Gemma model (needs an AI provider) |
 
@@ -91,9 +97,8 @@ You need accounts on: **GitHub** (have it), **Vercel**, **Neon**, **Cloudflare**
 ### 2. Vercel (hosting)
 1. <https://vercel.com/new> → Import `Tusharkhadde/MenuPgae` (framework auto-detected: Next.js).
 2. Add the environment variables below (Settings → Environment Variables), then **Deploy**.
-3. The build runs `npm run vercel-build` = `db:migrate` + `next build`, so the schema is applied on every deploy.
-4. After the first deploy, seed the demo once from your machine:
-   `DATABASE_URL="<unpooled string>" npm run db:seed`
+3. The build runs `npm run vercel-build` = `db:migrate` + `next build`, so the schema is applied on every deploy. On the **Production** environment a missing `DATABASE_URL` fails the build instead of skipping migrations.
+4. Don't seed production — demo data isn't needed there. The judge demo (`DEMO_LOGIN_ENABLED=true`) creates its own sandboxes on demand.
 5. Set `APP_URL` to your final URL (e.g. `https://menupage.vercel.app` or your domain) and redeploy.
 
 ### 3. Auth secret
@@ -143,9 +148,9 @@ Owners enter a domain in **Settings → Custom domain** and get DNS instructions
 | `DATABASE_URL` | **prod** | Neon pooled connection string |
 | `DATABASE_URL_UNPOOLED` | recommended | Direct connection for migrations |
 | `AUTH_SECRET` | **prod** | Auth.js session encryption |
-| `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | optional | Google sign-in |
-| `AUTH_RESEND_KEY`, `EMAIL_FROM` | optional* | Email magic links (*at least one of Google/Resend for real users) |
-| `DEMO_LOGIN_ENABLED` | optional | `false` to hide the demo sandbox login (default on) |
+| `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | **prod: this pair and/or Resend** | Google sign-in |
+| `AUTH_RESEND_KEY`, `EMAIL_FROM` | **prod: this pair and/or Google** | Email magic links. `EMAIL_FROM` must be on a domain verified in Resend |
+| `DEMO_LOGIN_ENABLED` | optional | `true` turns on the hidden judge demo at `/demo`. **Default off** (anything other than `true`) |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL` | for uploads in prod | Image storage |
 | `DODO_PAYMENTS_API_KEY`, `DODO_PAYMENTS_WEBHOOK_SECRET`, `DODO_PAYMENTS_ENVIRONMENT`, `DODO_PRODUCT_PRO` | optional | Billing (disabled unless all set, plus `APP_URL`) |
 | `PRO_EMAILS` | optional | Comma-separated emails that get Pro for free (your freelance clients) |
@@ -160,7 +165,7 @@ Owners enter a domain in **Settings → Custom domain** and get DNS instructions
 
 `AUTH_RESEND_KEY` + `EMAIL_FROM` also power reservation alerts, team invites and the weekly digest; without them those emails are skipped and everything else works.
 
-`next build` needs **none** of these — everything is validated lazily at runtime with clear error messages.
+`next build` needs **none** of these. A production server checks the required ones at start-up (`src/lib/prod-config.ts`, called from `src/instrumentation.ts`) and fails with one message listing everything missing.
 
 ---
 
@@ -177,8 +182,8 @@ See **[docs/HACKATHON.md](docs/HACKATHON.md)** for the architecture, setup of Go
 
 ## Prices & plan limits
 
-All plan limits and the **placeholder** display prices live in one file: [`src/config/plans.ts`](src/config/plans.ts).
-Current placeholders: **Pro ₹299/month · $5/month · €5 · £4 · AED 19 · S$7**. The amount actually charged is whatever your Dodo product is set to — update both.
+All plan limits live in one file: [`src/config/plans.ts`](src/config/plans.ts).
+No Pro price is hard-coded or shown on the site: the amount charged is whatever the Dodo Payments product (`DODO_PRODUCT_PRO`) is set to, and Dodo's checkout shows it before the owner pays. If you add a display price, make it match that product.
 
 ---
 
@@ -197,9 +202,9 @@ src/
     embed/[slug]/       iframe-embeddable menu (frame-ancestors *)
     api/                auth, upload, track, orders (+quote), service requests, feedback, reservations, live feed, PWA manifest/icon, digest cron, billing, Dodo webhook, QR downloads
   components/           ui (shadcn), marketing, dashboard, menu (public page)
-  config/               plans.ts (limits + placeholder prices), reserved slugs, site
-  lib/                  pure logic: ai (Gemma provider layer, JSON parsing, translate), glossary, prep (order history, synthetic data), hours, money, whatsapp, options (variants/add-ons), order pricing, schedule (timed menus, happy hour, coupons), upi, csv-import, languages, reservations, digest, roles, limits, validation, billing/*, qr, storage, env
-  server/               server-only data access, actions (all authorized), billing, analytics, demo sandbox
+  config/               plans.ts (limits; no hard-coded prices), reserved slugs, site
+  lib/                  pure logic: ai (Gemma provider layer, JSON parsing, translate), glossary, prep (order history, readiness, synthetic demo data — demo sandboxes only), hours, money, whatsapp, options (variants/add-ons), order pricing, schedule (timed menus, happy hour, coupons), upi, csv-import, languages, reservations, digest, roles, limits, validation, billing/*, qr, storage, env
+  server/               server-only data access, actions (all authorized), billing, analytics, judge demo sandbox
 drizzle/                SQL migrations
 scripts/                migrate + seed + eval-translate (glossary-preservation eval)
 agent/                  Python FastAPI prep agent: TabPFN forecast + Gemma prep list (pytest, Render)
@@ -214,4 +219,4 @@ tests/                  Vitest unit tests (hours, money, WhatsApp, plans/limits/
 - Excel `.xlsx` files aren't parsed directly — export to CSV first (no extra dependency, keeps the bundle small).
 - Rate limiting is in-memory per server instance (good burst protection on serverless, not a global quota). Swap in Upstash/Redis if you need strict limits.
 - Public pages are cached (ISR, 5 min) and revalidated instantly when the owner edits; the open/closed badge is computed in the browser so it's always current.
-- Legal pages are placeholders — have them reviewed before launch (GDPR for EU, DPDP Act for India).
+- Legal pages are placeholders — have them reviewed before launch (GDPR for EU, DPDP Act for India). The Terms point to "the support email listed on this website", which doesn't exist yet: add a real contact before launch.
