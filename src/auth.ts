@@ -9,6 +9,7 @@ import { env, features, isProd } from "@/lib/env";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { createDemoAccount } from "@/server/demo";
 import { magicLinkEmail } from "@/lib/email";
+import { assertProductionConfig } from "@/lib/prod-config";
 
 declare module "next-auth" {
   interface Session {
@@ -17,6 +18,8 @@ declare module "next-auth" {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
+  // Same check as server start, in case instrumentation didn't run: never guess in production.
+  assertProductionConfig();
   const db = await getDb();
   const e = env();
 
@@ -36,6 +39,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
         from: e.EMAIL_FROM ?? "MenuPage <onboarding@resend.dev>",
         async sendVerificationRequest({ identifier, url, provider }) {
           if (!e.AUTH_RESEND_KEY) {
+            if (isProd()) throw new Error("AUTH_RESEND_KEY is not set: refusing to print a magic link to the console in production.");
             console.info(`\n[menupage] Magic sign-in link for ${identifier}:\n${url}\n`);
             return;
           }

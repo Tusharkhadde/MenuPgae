@@ -20,7 +20,7 @@ export type SampleItem = {
 };
 export type SampleCategory = { name: string; description?: string; availability?: Availability; items: SampleItem[] };
 
-/** A realistic Indian café menu used for the public demo and the "start with a sample menu" option. */
+/** A fictional Indian café menu: the demo restaurant's menu, and the opt-in "start with a sample menu" template. Not a real business. */
 export const SAMPLE_MENU: SampleCategory[] = [
   {
     name: "Chai & Coffee",
@@ -71,10 +71,10 @@ export const SAMPLE_MENU: SampleCategory[] = [
 
 export const DEMO_RESTAURANT = {
   slug: "demo",
-  name: "Chai & Crumbs",
-  tagline: "Neighbourhood café · chai, street food & slow mornings",
+  name: "Chai & Crumbs (Demo data)",
+  tagline: "Demo data · a fictional café, not a real restaurant",
   description:
-    "A sample café created to show what a MenuPage looks like. Browse the menu, add a few items and try ordering on WhatsApp — the message opens prefilled, ready to send.",
+    "Demo data: a fictional café made up to show what a MenuPage looks like. It is not a real restaurant — the dishes, prices, phone number and address are invented, and orders placed here are not sent anywhere.",
   cuisine: "Café · Street food",
   currency: "INR",
   timezone: "Asia/Kolkata",
@@ -82,7 +82,7 @@ export const DEMO_RESTAURANT = {
   phone: "+91 20 0000 0000",
   whatsapp: "910000000000",
   instagram: "menupage",
-  address: "Sample address, Pune, Maharashtra, India",
+  address: "Demo data — not a real address",
   mapsUrl: "https://maps.google.com/?q=Pune",
   hours: ((): WeeklyHours => {
     const h = defaultHours();

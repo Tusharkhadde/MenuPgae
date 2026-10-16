@@ -33,7 +33,10 @@ export async function loadOrderHistory(restaurant: Restaurant): Promise<HistoryR
   return ordersToHistory(rows, catalog, restaurant.timezone, 10 ** minorDigits(restaurant.currency));
 }
 
-/** Clearly-labelled synthetic history built from this restaurant's own menu (for demos / new restaurants). */
+/**
+ * Synthetic "Demo data" history built from a restaurant's menu. ONLY for demo sandbox accounts (the hidden
+ * judge demo): callers must check historySourceFor(user) === "synthetic". Real accounts never reach this.
+ */
 export async function syntheticHistory(restaurant: Restaurant): Promise<HistoryRow[]> {
   const db = await getDb();
   const [its, cats] = await Promise.all([
@@ -44,7 +47,7 @@ export async function syntheticHistory(restaurant: Restaurant): Promise<HistoryR
       .orderBy(asc(items.position)),
     db.select({ id: categories.id, name: categories.name }).from(categories).where(eq(categories.restaurantId, restaurant.id)),
   ]);
-  if (!its.length) throw new UserError("Add some dishes to your menu first — the demo data is generated from your menu.");
+  if (!its.length) throw new UserError("Add some dishes to your menu first — the demo data is generated from the menu.");
   const catName = new Map(cats.map((c) => [c.id, c.name]));
   const div = 10 ** minorDigits(restaurant.currency);
   const picked = [...its.filter((i) => i.bestseller), ...its.filter((i) => !i.bestseller)].slice(0, 25);

@@ -90,7 +90,7 @@ export function MenuPageView({ menu, pageUrl, embed = false }: { menu: PublicMen
       )}
       {menu.isDemo && (
         <div className="bg-[var(--m-text)] px-4 py-2 text-center text-xs text-[var(--m-bg)]">
-          This is a sample restaurant made with MenuPage.{" "}
+          <strong>Demo data</strong> — a fictional café made up to demo MenuPage. Not a real restaurant; orders here aren&apos;t sent.{" "}
           <Link href={`${siteUrl()}/login?intent=signup`} className="font-semibold underline underline-offset-2">Create yours free →</Link>
         </div>
       )}

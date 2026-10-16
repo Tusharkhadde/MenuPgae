@@ -298,11 +298,11 @@ export function CartSheet({
   }
 
   return (
-    <Sheet title={preview ? "Demo: message preview" : "Your order"} onClose={onClose}>
+    <Sheet title={preview ? "Demo data: message preview" : "Your order"} onClose={onClose}>
       {preview ? (
         <div className="mt-4">
           <p className="text-sm text-[var(--m-muted)]">
-            This is a demo restaurant, so nothing is sent. On a real menu, WhatsApp opens with this message and the order lands in the restaurant&apos;s live inbox:
+            Demo data: this is a fictional restaurant, so nothing is sent. On a real menu, WhatsApp opens with this message and the order lands in the restaurant&apos;s live inbox:
           </p>
           <pre className="mt-3 whitespace-pre-wrap rounded-2xl bg-[#e7fbe0] p-4 font-sans text-sm leading-relaxed text-neutral-800">{preview}</pre>
           {restaurant.upiId && <UpiPay upiId={restaurant.upiId} payeeName={restaurant.name} amountMinor={total} note={`${restaurant.name} demo order`} />}
