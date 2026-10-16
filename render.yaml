@@ -30,3 +30,6 @@ services:
         sync: false
       - key: GEMMA_MODEL
         value: gemma-3-27b-it
+      # Optional Sentry Agent Tracing (https://sentry.io → project → Client Keys). Unset = no-op.
+      - key: SENTRY_DSN
+        sync: false
