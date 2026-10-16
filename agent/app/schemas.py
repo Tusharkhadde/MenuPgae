@@ -22,12 +22,19 @@ class Restaurant(BaseModel):
     currency: str = Field(default="INR", max_length=8)
 
 
-class PrepRequest(BaseModel):
+class Festival(BaseModel):
+    date: Date
+    key: str = Field(min_length=1, max_length=40)
+
+
+class HistoryPayload(BaseModel):
+    """Fields shared by every endpoint that learns from a restaurant's order history."""
+
     restaurant: Restaurant = Restaurant()
     history: list[HistoryRow] = Field(max_length=60_000)
     holidays: list[Date] = Field(default_factory=list, max_length=400)
-    start_date: Date
-    horizon_days: int = Field(default=3, ge=1, le=7)
+    # Movable festivals as features. Omitted = the agent's built-in calendar (app/data/festivals_in.json).
+    festivals: list[Festival] | None = Field(default=None, max_length=400)
     synthetic: bool = False
 
     @field_validator("history")
@@ -36,3 +43,20 @@ class PrepRequest(BaseModel):
         if not v:
             raise ValueError("history is empty")
         return v
+
+    def festival_pairs(self) -> list[tuple[Date, str]] | None:
+        return None if self.festivals is None else [(f.date, f.key) for f in self.festivals]
+
+
+class PrepRequest(HistoryPayload):
+    start_date: Date
+    horizon_days: int = Field(default=3, ge=1, le=7)
+
+
+class BacktestRequest(HistoryPayload):
+    holdout_days: int = Field(default=14, ge=7, le=28)
+
+
+class AskRequest(HistoryPayload):
+    question: str = Field(min_length=2, max_length=300)
+    today: Date  # restaurant-local date; forecasts start tomorrow

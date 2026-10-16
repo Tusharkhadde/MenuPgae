@@ -9,13 +9,29 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 
+from .festivals import builtin_festivals, festival_features
 from .schemas import HistoryRow
 
 BUCKETS = ["breakfast", "lunch", "snacks", "dinner"]
 
 # Columns fed to TabPFN, in order. Codes are integers; CATEGORICAL marks which ones are categories.
-FEATURES = ["weekday", "is_weekend", "holiday", "day_index", "day_of_month", "bucket", "item_code", "category_code", "price"]
-CATEGORICAL = [FEATURES.index(c) for c in ("weekday", "bucket", "item_code", "category_code")]
+FEATURES = [
+    "weekday",
+    "is_weekend",
+    "holiday",
+    "festival",
+    "days_to_festival",
+    "next_festival",
+    "day_index",
+    "day_of_month",
+    "bucket",
+    "item_code",
+    "category_code",
+    "price",
+]
+CATEGORICAL = [FEATURES.index(c) for c in ("weekday", "next_festival", "bucket", "item_code", "category_code")]
+
+Festivals = list[tuple[date, str]]
 
 
 def hour_bucket(hour: int) -> str:
@@ -40,13 +56,14 @@ class Encoded:
     combos: list[tuple[str, str]]  # (item, bucket) pairs ever sold
     first_date: date
     last_date: date
+    festivals: Festivals | None = None  # (date, key); None = built-in calendar (data/festivals_in.json)
 
 
 def _codes(values: Iterable[str]) -> dict[str, int]:
     return {v: i for i, v in enumerate(sorted(set(values)))}
 
 
-def encode_history(history: list[HistoryRow], holidays: Iterable[date]) -> Encoded:
+def encode_history(history: list[HistoryRow], holidays: Iterable[date], festivals: Festivals | None = None) -> Encoded:
     hol = set(holidays)
     raw = pd.DataFrame(
         {
@@ -72,7 +89,9 @@ def encode_history(history: list[HistoryRow], holidays: Iterable[date]) -> Encod
     )
     frame = grid.merge(agg, on=["date", "item", "bucket"], how="left").fillna({"qty": 0.0})
     items = sorted(item_category)
-    enc = Encoded(frame=frame, items=items, item_category=item_category, item_price=item_price, combos=combos, first_date=first, last_date=last)
+    enc = Encoded(
+        frame=frame, items=items, item_category=item_category, item_price=item_price, combos=combos, first_date=first, last_date=last, festivals=festivals
+    )
     enc.frame = add_features(frame, enc, hol)
     return enc
 
@@ -86,6 +105,11 @@ def add_features(frame: pd.DataFrame, enc: Encoded, holidays: set[date]) -> pd.D
     out["weekday"] = dates.dt.weekday.astype(int)
     out["is_weekend"] = (out["weekday"] >= 5).astype(int)
     out["holiday"] = out["date"].map(lambda d: int(d in holidays)).astype(int)
+    fest = enc.festivals if enc.festivals is not None else builtin_festivals()
+    feats = {d: festival_features(d, fest) for d in set(out["date"])}
+    out["festival"] = out["date"].map(lambda d: feats[d][0]).astype(int)
+    out["days_to_festival"] = out["date"].map(lambda d: feats[d][1]).astype(int)
+    out["next_festival"] = out["date"].map(lambda d: feats[d][2]).astype(int)
     out["day_index"] = out["date"].map(lambda d: (d - enc.first_date).days).astype(int)
     out["day_of_month"] = dates.dt.day.astype(int)
     out["bucket"] = out["bucket"].map(bucket_codes).astype(int)

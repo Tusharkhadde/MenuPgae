@@ -15,6 +15,8 @@ from typing import Any
 
 import httpx
 
+from .tracing import chat_span
+
 DEFAULT_GEMMA_MODEL = "gemma-3-27b-it"
 DEFAULT_GEMMA_FALLBACK_MODEL = "gemma-4-26b-a4b-it"
 DEFAULT_LOCAL_MODEL = "gemma3:4b"
@@ -130,8 +132,28 @@ def parse_model_json(text: str) -> dict[str, Any]:
 # ----------------------------------------------------------------------------- calls
 
 
-def generate_text(cfg: LlmConfig, prompt: str, *, client: httpx.Client | None = None, timeout: float = 60.0) -> tuple[str, str]:
-    """Returns (text, model_used)."""
+def _record_usage(span, data: dict[str, Any], model: str) -> None:
+    """Token counts if the provider returned them (Google usageMetadata / OpenAI-style usage)."""
+    span.set_data("gen_ai.response.model", model)
+    um = data.get("usageMetadata") or {}
+    us = data.get("usage") or {}
+    inp = um.get("promptTokenCount", us.get("prompt_tokens"))
+    out = um.get("candidatesTokenCount", us.get("completion_tokens"))
+    if isinstance(inp, int):
+        span.set_data("gen_ai.usage.input_tokens", inp)
+    if isinstance(out, int):
+        span.set_data("gen_ai.usage.output_tokens", out)
+
+
+def generate_text(
+    cfg: LlmConfig, prompt: str, *, client: httpx.Client | None = None, timeout: float = 60.0, purpose: str = "generate"
+) -> tuple[str, str]:
+    """Returns (text, model_used). Traced as a gen_ai.chat span when Sentry is on."""
+    with chat_span(cfg.provider, cfg.model, purpose) as span:
+        return _generate_text(cfg, prompt, span, client=client, timeout=timeout)
+
+
+def _generate_text(cfg: LlmConfig, prompt: str, span: Any, *, client: httpx.Client | None, timeout: float) -> tuple[str, str]:
     own = client is None
     http = client or httpx.Client(timeout=timeout)
     try:
@@ -147,7 +169,9 @@ def generate_text(cfg: LlmConfig, prompt: str, *, client: httpx.Client | None = 
                     continue
                 if res.status_code >= 400:
                     raise LlmError(f"Google AI Studio HTTP {res.status_code}: {res.text[:300]}")
-                parts = (res.json().get("candidates") or [{}])[0].get("content", {}).get("parts", [])
+                body = res.json()
+                _record_usage(span, body, model)
+                parts = (body.get("candidates") or [{}])[0].get("content", {}).get("parts", [])
                 return "".join(p.get("text", "") for p in parts if not p.get("thought")), model
             raise LlmError("no Gemma model available")
         headers = {"Content-Type": "application/json"}
@@ -160,7 +184,9 @@ def generate_text(cfg: LlmConfig, prompt: str, *, client: httpx.Client | None = 
         )
         if res.status_code >= 400:
             raise LlmError(f"local model HTTP {res.status_code}: {res.text[:300]}")
-        content = (res.json().get("choices") or [{}])[0].get("message", {}).get("content") or ""
+        body = res.json()
+        _record_usage(span, body, cfg.model)
+        content = (body.get("choices") or [{}])[0].get("message", {}).get("content") or ""
         if isinstance(content, list):
             content = "".join(p.get("text", "") for p in content)
         return content, cfg.model

@@ -23,7 +23,7 @@ def test_encode_zero_fills_and_features():
     assert enc.frame.loc[enc.frame["date"] == date(2026, 10, 10), "holiday"].eq(0).all()
     fut = future_frame(enc, date(2026, 10, 15), 3, [])
     assert len(fut) == 12 and fut["qty"].isna().all()
-    assert CATEGORICAL == [0, 5, 6, 7]
+    assert CATEGORICAL == [FEATURES.index(c) for c in ("weekday", "next_festival", "bucket", "item_code", "category_code")]
 
 
 def test_forecast_shapes_and_monotone_quantiles(fake_factory):

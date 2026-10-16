@@ -51,6 +51,10 @@ const schema = z.object({
   AGENT_URL: optional,
   AGENT_SECRET: optional,
   CRON_SECRET: optional,
+  // Optional Sentry tracing of the server actions that call the agent (no-op when unset)
+  SENTRY_DSN: optional,
+  SENTRY_TRACES_SAMPLE_RATE: optional,
+  SENTRY_ENVIRONMENT: optional,
 });
 
 export type Env = z.infer<typeof schema>;

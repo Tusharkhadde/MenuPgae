@@ -5,6 +5,8 @@ export type PrepRequest = {
   restaurant: { name: string; timezone: string; currency: string };
   history: HistoryRow[];
   holidays: string[];
+  /** Movable festivals in the window (src/lib/prep/festivals.ts) — used as forecast features by the agent. */
+  festivals: { date: string; key: string }[];
   start_date: string;
   horizon_days: number;
   synthetic: boolean;
@@ -36,4 +38,43 @@ export type PrepPlan = {
     risk_notes: { item: string; note: string }[];
   };
   warnings: string[];
+};
+
+/** Request body shared by /v1/backtest and /v1/ask. */
+export type HistoryPayload = Pick<PrepRequest, "restaurant" | "history" | "holidays" | "festivals" | "synthetic">;
+
+export type ModelScore = { mae: number; wape: number | null };
+export type BacktestModel = "tabpfn" | "last_week" | "weekday_mean_4w";
+
+/** Response from POST /v1/backtest. Every number is computed by the agent from the held-out days. */
+export type BacktestResult = {
+  generated_at: string;
+  synthetic: boolean;
+  holdout_days: number;
+  holdout: { start: string; end: string };
+  train: { days: number; rows: number };
+  dish_days: number;
+  models: Record<BacktestModel, string> & { tabpfn_detail: string };
+  overall: Record<BacktestModel, ModelScore>;
+  per_dish: ({ item: string; actual_total: number; days: number } & Record<BacktestModel, ModelScore>)[];
+  best_by_wape: BacktestModel | null;
+};
+
+/** Response from POST /v1/ask. Quantities come from TabPFN; the language model only parses and words. */
+export type AskResult = {
+  generated_at: string;
+  synthetic: boolean;
+  question: string;
+  intent: {
+    tool: "forecast_demand";
+    arguments: { dishes: string[]; start_date: string; end_date: string };
+    parser: "gemma" | "rules";
+    unmatched: string[];
+  };
+  rows: ForecastRow[];
+  totals: { item: string; prep: number; median: number; low: number; high: number }[];
+  answer: string;
+  answer_source: "gemma" | "template";
+  models: { forecaster: string; language: string };
+  notes: string[];
 };

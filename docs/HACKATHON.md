@@ -1,7 +1,7 @@
 # MenuPage × open models — hackathon write-up kit
 
 DEV / Hacktoberfest "Side Hustle" challenge: *build something with open-weight / open-source AI at its core that someone would pay for.*
-Target categories: **Best Use of Gemma**, **Best Use of TabPFN (Prior Labs)**, **Best Use of Render**.
+Target categories: **Best Use of Gemma**, **Best Use of TabPFN (Prior Labs)**, **Best Use of Render**, plus the **Sentry Agent Tracing** partner prize.
 
 MenuPage is a QR-menu + one-page-website SaaS for small Indian restaurants and food stalls (Pro placeholder price ₹299/month, see `src/config/plans.ts`). This branch puts two open models at the centre of the two Pro features owners would actually pay for:
 
@@ -9,6 +9,11 @@ MenuPage is a QR-menu + one-page-website SaaS for small Indian restaurants and f
 | --- | --- | --- |
 | **Menu translation that doesn't butcher dish names** (+ menu-photo import) | **Gemma** (open weights) + a curated **dish glossary** | `src/lib/ai/*`, `src/lib/glossary/*`, Menu → Translations |
 | **Prep planner**: "how many portions of each dish tomorrow?" + "86 risk" | **TabPFN** (tabular foundation model) for the numbers, **Gemma** for the wording | `agent/` (Python, on **Render**), Dashboard → Prep planner |
+| **Forecast accuracy** (backtest vs naive baselines) | **TabPFN** | `agent/app/backtest.py`, Prep planner → Forecast accuracy (§7) |
+| **Ask the planner**: "how much paneer for Saturday?" | **Gemma** tool call → **TabPFN** → Gemma wording | `agent/app/ask.py`, Prep planner → Ask the planner (§10) |
+| **Festival-aware forecasts** (Diwali, Ganesh Chaturthi, Eid …) | features for **TabPFN** | `agent/app/data/festivals_in.json` (§9) |
+| **Open vs closed scorecard** | Gemma vs Gemini, same key | `npm run eval:translate -- --scorecard` (§8) |
+| **Agent tracing** | Sentry spans for Gemma + TabPFN calls | `agent/app/tracing.py`, `src/instrumentation.ts` (§11) |
 
 > Nothing in this document is a measured result yet. Every number in the DEV post outline below is a placeholder to be filled from real runs (`npm run eval:translate`, a real restaurant's prep plan). No testimonials, user counts or metrics are invented anywhere in the repo.
 
@@ -135,12 +140,121 @@ Dashboard → a restaurant → **Prep planner** → Data: *Synthetic demo data*.
    - Screenshot of a prep plan _[label synthetic if it is]_; real-data run _[only if a restaurant agrees]_.
 5. **Render** — `render.yaml`, free plan, health check, cold-start trade-off and why the web app stays on Vercel.
 6. **Why open = a viable business** — cost at ₹299, offline mode, no lock-in, licensing caveat for TabPFN (section 2).
-7. **What's next** — festival calendar input (Diwali/Ganesh Chaturthi dates), stock levels for real 86 alerts, self-hosted TabPFNv2.
-8. **Links** — repo, demo `/r/demo`, docs.
+7. **Proof, not vibes** — forecast accuracy table (§7), open vs closed scorecard (§8), Sentry trace screenshot (§11). _[paste real outputs only]_
+8. **What's next** — owner-entered local festivals/events, stock levels for real 86 alerts, self-hosted TabPFNv2.
+9. **Links** — repo, demo `/r/demo`, docs.
 
 ---
 
-## 5. What is and isn't verified in this PR
+## 5. What is and isn't verified
 
-- Unit tests mock every model call (Vitest for the app, pytest for the agent). No live Google AI Studio, Ollama or Prior Labs call was made while building this; run the eval script and one real prep plan with your keys before publishing numbers.
-- The Gemma model ids and TabPFN terms above were checked against the vendors' pages in October 2026 and can change.
+- Unit tests mock every model call (Vitest for the app, pytest for the agent). No live Google AI Studio, Gemini, Ollama, Prior Labs or Sentry call was made while building any of this; run the commands in §6 with your keys before publishing numbers.
+- The Gemma/Gemini model ids, prices and TabPFN terms in this document were checked against the vendors' pages in October 2026 and can change.
+- Festival dates were checked against timeanddate.com on 2026-10-16; Eid 2027 dates are tentative.
+
+---
+
+## 6. Getting the real numbers (run these before writing the post)
+
+```bash
+# 0) keys (never commit them)
+export GOOGLE_AI_API_KEY=...            # Gemma + the Gemini baseline
+export PRIORLABS_API_KEY=...            # TabPFN
+
+# 1) Open vs closed translation scorecard → docs/results/translate-scorecard.md
+npm run eval:translate -- --scorecard --langs hi,mr,fr,ar
+
+# 2) Forecast backtest on the labelled synthetic demo → docs/results/backtest-synthetic.{md,json}
+npm run prep:export -- --synthetic --end 2026-10-15
+cd agent && pip install -r requirements.txt && python backtest.py --input ../.data/history-synthetic.json \
+  --markdown ../docs/results/backtest-synthetic.md --json ../docs/results/backtest-synthetic.json && cd ..
+
+# 3) Same backtest on a real restaurant (only with the owner's OK; keep the export private)
+npm run prep:export -- --restaurant <slug>        # needs DATABASE_URL
+cd agent && python backtest.py --input ../.data/history-<slug>.json && cd ..
+
+# 4) In the app: Prep planner → "Ask the planner" and "Run backtest" (agent deployed on Render), with SENTRY_DSN set for §11.
+```
+
+---
+
+## 7. Forecast accuracy (TabPFN backtest)
+
+**What it does.** The agent hides the last 14 days, trains TabPFN only on the days before, forecasts the hidden days, and compares the **median** forecast with what was actually sold — per dish and day (meal periods summed). Two baselines an owner would actually use, both computed only from the training days so nobody peeks:
+
+- **Same weekday last week** — "we sold 40 last Saturday".
+- **4-week weekday mean** — average of the last four same weekdays.
+
+Metrics: **MAE** (portions per dish-day) and **WAPE** (total absolute error ÷ total sold; undefined, shown "—", when nothing was sold). Code: `agent/app/backtest.py`; API `POST /v1/backtest`; CLI `agent/backtest.py`; UI card *Forecast accuracy* (needs 28+ days of orders, or the synthetic demo — labelled).
+
+**Results** _[paste `docs/results/backtest-synthetic.md` and, if a restaurant agrees, the real one — do not round or edit]_
+
+| Method | MAE | WAPE |
+| --- | --- | --- |
+| TabPFN (median) | _[X]_ | _[X%]_ |
+| Same weekday last week | _[X]_ | _[X%]_ |
+| 4-week weekday mean | _[X]_ | _[X%]_ |
+
+Honest caveats to keep in the post: synthetic data is generated with weekday/holiday patterns the model can learn, so it flatters every method; one 14-day window is a single sample.
+
+---
+
+## 8. Open vs closed: translation scorecard
+
+`npm run eval:translate -- --scorecard` runs the same 21 menu entries per language through:
+
+1. **Gemma + dish glossary** (the product),
+2. **Gemma without the glossary**,
+3. **Closed baseline: Gemini** — `GEMINI_BASELINE_MODEL`, default `gemini-3.5-flash-lite`, same `GOOGLE_AI_API_KEY`, no glossary (`--closed-glossary` adds a Gemini + glossary row).
+
+Columns: dish names kept (scored against the full glossary for every row), literal traps, explanations, **latency per menu** (one request = one whole menu), tokens, and **estimated cost per menu**. Cost = tokens (provider-reported; marked *est.* when we fell back to chars/4) × rates in `src/lib/ai/scorecard.ts`: Gemma on AI Studio is free-tier only ($0; local Ollama hardware not modelled), `gemini-3.5-flash-lite` is $0.30 in / $2.50 out per 1M tokens (<https://ai.google.dev/gemini-api/docs/pricing>, checked 2026-10-16). Override with `--rate model=in/out`. The markdown file is written to `docs/results/` only if at least one call succeeded.
+
+**Results** _[paste `docs/results/translate-scorecard.md`]_
+
+| Model | Names kept | Latency / menu | Est. cost / menu |
+| --- | --- | --- | --- |
+| Gemma + glossary | _[X/Y]_ | _[Xs]_ | _[$X]_ |
+| Gemma, no glossary | _[X/Y]_ | _[Xs]_ | _[$X]_ |
+| Gemini (closed) | _[X/Y]_ | _[Xs]_ | _[$X]_ |
+
+---
+
+## 9. Festival-aware forecasts
+
+- `agent/app/data/festivals_in.json`: Holi, Eid al-Fitr, Eid al-Adha, Ganesh Chaturthi, Navratri (first day), Dussehra, Diwali and Christmas for 2024–2027, with sources (timeanddate.com India holiday lists per year; Diwali cross-checked with drikpanchang). One file, read by the agent and imported by the app (`src/lib/prep/festivals.ts`).
+- Features per day on both sides: `festival` (0/1), `days_to_festival` (0–30, capped), `next_festival` (categorical). The app sends the festivals in the window with every request (`festivals: [{date, key}]`); the agent falls back to its built-in copy.
+- The synthetic demo now bumps festival days too, so the feature has something to learn in demos (still labelled synthetic).
+- Caveats: regional observance can differ by a day (e.g. Diwali 2024: Oct 31 national, Nov 1 in Maharashtra); Eid 2027 is tentative.
+
+---
+
+## 10. Ask the planner (Gemma tool call → TabPFN)
+
+Owner types *"how much paneer for Saturday?"*:
+
+1. **Gemma → tool call.** Prompt = the menu + a calendar of the next 7 days (so the model never does date maths). Output: `{"tool": "forecast_demand", "arguments": {"dishes": [...], "start_date": "...", "end_date": "..."}}`. Validated in code: unknown dishes dropped and reported, ingredient words ("paneer") expand to every dish containing them, dates clamped to tomorrow…+6.
+2. **TabPFN** runs the forecast for those dishes/days.
+3. **Gemma words the answer** from the forecast facts. Every number in the answer must be one of TabPFN's numbers (or a date / a number from the question or a dish name); otherwise the answer is replaced by a template built from the forecast. The table under the answer always shows TabPFN's numbers.
+
+No AI provider? A rule parser handles the intent and the template writes the answer — the UI says which was used. Rate limit: 20 questions per user per hour (`src/server/actions/prep.ts`); questions are capped at 300 characters.
+
+_[screenshot: question, answer, tool-call line, table]_
+
+---
+
+## 11. Sentry Agent Tracing
+
+Optional and fully no-op without `SENTRY_DSN` (tested on both sides).
+
+- **Agent (Python, Render):** `sentry-sdk` with manual AI-agent spans (`agent/app/tracing.py`): `invoke_agent prep-planner` → `chat <gemma model>` (model, input/output tokens when Google/Ollama return them, latency) → `execute_tool forecast_demand` → `tabpfn.fit` / `tabpfn.predict` (rows, latency). Prompts and answers are not attached.
+- **App (Next.js, Vercel):** minimal `@sentry/nextjs` init in `src/instrumentation.ts` (Node runtime only, no client SDK, no source-map upload) and a `prep-agent <task>` span around each server action that calls the agent (`src/lib/observability.ts`). The fetch carries `sentry-trace`/`baggage`, so both halves form one trace.
+
+**Capturing screenshots for the write-up**
+
+1. Create a Sentry project (Python) → *Settings → Client Keys* → copy the DSN. Set `SENTRY_DSN` on Render (agent) and on Vercel (same DSN or a second Next.js project), redeploy both.
+2. In MenuPage: Prep planner → ask *"How much paneer for Saturday?"*, then *Build prep plan*, then *Run backtest*.
+3. Sentry → the **Agents** dashboard (Agent Tracing; under Insights in some Sentry versions): screenshot the agent run list and one trace showing `invoke_agent prep-planner` with its `chat` and `execute_tool` children; open a `chat` span and screenshot the model + token attributes.
+4. Sentry → **Explore → Traces**: open the trace that starts at the Vercel `prep-agent ask` span and continues into the Render agent — screenshot the waterfall (shows Render cold start vs TabPFN vs Gemma time).
+5. Blur the DSN/org slug if visible. Don't screenshot real customer data; use the synthetic demo.
+
+_[screenshots: agents dashboard, trace waterfall, chat span attributes]_

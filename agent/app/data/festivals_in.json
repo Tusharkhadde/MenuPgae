@@ -1,0 +1,61 @@
+{
+  "_comment": [
+    "Movable Indian festival dates used as forecast features (festival day + days-to-festival).",
+    "Single source of truth: read by the Python agent (agent/app/festivals.py) and by the Next.js app (src/lib/prep/festivals.ts).",
+    "Dates are the main national observance day; regional observance can differ by a day (see per-entry notes).",
+    "Verified 2026-10-16 against timeanddate.com India holiday lists (sources below). Re-check Eid dates for 2027: they depend on moon sighting.",
+    "Christmas is a fixed date (also in FIXED_HOLIDAYS_IN); it is listed here so days-to-festival counts down to it too."
+  ],
+  "sources": {
+    "2024": "https://www.timeanddate.com/holidays/india/2024",
+    "2025": "https://www.timeanddate.com/holidays/india/2025",
+    "2026": "https://www.timeanddate.com/holidays/india/2026",
+    "2027": "https://www.timeanddate.com/holidays/india/2027",
+    "diwali_cross_check": "https://www.drikpanchang.com/hindu-festivals/diwali/diwali.html"
+  },
+  "festivals": [
+    {
+      "key": "holi",
+      "name": "Holi",
+      "dates": { "2024": "2024-03-25", "2025": "2025-03-14", "2026": "2026-03-04", "2027": "2027-03-22" }
+    },
+    {
+      "key": "eid_al_fitr",
+      "name": "Eid al-Fitr (Ramzan Id)",
+      "dates": { "2024": "2024-04-11", "2025": "2025-03-31", "2026": "2026-03-21", "2027": "2027-03-10" },
+      "note": "2027 is listed as tentative by timeanddate.com (moon sighting)."
+    },
+    {
+      "key": "eid_al_adha",
+      "name": "Eid al-Adha (Bakrid)",
+      "dates": { "2024": "2024-06-17", "2025": "2025-06-07", "2026": "2026-05-28", "2027": "2027-05-17" },
+      "note": "2027 is listed as tentative by timeanddate.com (moon sighting)."
+    },
+    {
+      "key": "ganesh_chaturthi",
+      "name": "Ganesh Chaturthi",
+      "dates": { "2024": "2024-09-07", "2025": "2025-08-27", "2026": "2026-09-14", "2027": "2027-09-04" }
+    },
+    {
+      "key": "navratri",
+      "name": "Navratri (first day, Sharad)",
+      "dates": { "2024": "2024-10-03", "2025": "2025-09-22", "2026": "2026-10-11", "2027": "2027-09-30" }
+    },
+    {
+      "key": "dussehra",
+      "name": "Dussehra",
+      "dates": { "2024": "2024-10-12", "2025": "2025-10-02", "2026": "2026-10-20", "2027": "2027-10-09" }
+    },
+    {
+      "key": "diwali",
+      "name": "Diwali (Lakshmi Puja)",
+      "dates": { "2024": "2024-10-31", "2025": "2025-10-20", "2026": "2026-11-08", "2027": "2027-10-29" },
+      "note": "2024: national gazetted holiday on Oct 31; drikpanchang (New Delhi) and Maharashtra observed Lakshmi Puja on Nov 1."
+    },
+    {
+      "key": "christmas",
+      "name": "Christmas",
+      "dates": { "2024": "2024-12-25", "2025": "2025-12-25", "2026": "2026-12-25", "2027": "2027-12-25" }
+    }
+  ]
+}

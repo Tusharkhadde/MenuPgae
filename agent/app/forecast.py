@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 
 from .features import CATEGORICAL, FEATURES, Encoded, bucket_name, future_frame
+from .tracing import ai_span
 
 MAX_TRAIN_ROWS = 10_000  # keep requests small and inside TabPFN API limits
 HOLDOUT_DAYS = 14
@@ -61,7 +62,8 @@ def forecaster_label() -> str:
 
 def _quantiles(model: Regressor, X: pd.DataFrame, qs: list[float]) -> np.ndarray:
     """Returns array shape (len(qs), n_rows), clipped at 0."""
-    out = model.predict(X, output_type="quantiles", quantiles=qs)
+    with ai_span("ml.predict", "tabpfn.predict", rows=int(len(X)), quantiles=",".join(str(q) for q in qs)):
+        out = model.predict(X, output_type="quantiles", quantiles=qs)
     arr = np.asarray([np.asarray(o, dtype=float) for o in out]) if isinstance(out, (list, tuple)) else np.asarray(out, dtype=float)
     if arr.ndim == 1:  # a regressor that only gives a point estimate
         arr = np.vstack([arr for _ in qs])
@@ -82,8 +84,9 @@ def _train_slice(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def fit(factory: RegressorFactory, frame: pd.DataFrame) -> Regressor:
-    model = factory(CATEGORICAL)
-    model.fit(frame[FEATURES], frame["qty"].to_numpy(dtype=float))
+    with ai_span("ml.fit", "tabpfn.fit", rows=int(len(frame)), features=len(FEATURES), model=forecaster_label()):
+        model = factory(CATEGORICAL)
+        model.fit(frame[FEATURES], frame["qty"].to_numpy(dtype=float))
     return model
 
 

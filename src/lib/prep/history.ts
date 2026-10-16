@@ -59,9 +59,12 @@ export function historyDays(rows: HistoryRow[]): number {
 /** Fewer days than this and the page suggests the synthetic demo dataset instead. */
 export const MIN_HISTORY_DAYS = 14;
 
+/** The backtest needs this many days with orders: 14 to learn from + a 14-day holdout. */
+export const MIN_BACKTEST_DAYS = 28;
+
 /**
- * Fixed-date public holidays in India (month-day). Festival holidays (Diwali, Holi, Eid, Ganesh
- * Chaturthi …) move every year and are NOT included — owners can't enter them yet.
+ * Fixed-date public holidays in India (month-day). Movable festivals (Diwali, Holi, Eid, Ganesh
+ * Chaturthi …) are in src/lib/prep/festivals.ts and sent to the agent as separate features.
  */
 export const FIXED_HOLIDAYS_IN = ["01-26", "05-01", "08-15", "10-02", "12-25"] as const;
 

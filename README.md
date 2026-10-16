@@ -30,7 +30,7 @@ Owners build their menu in a dashboard, print table QR codes, and guests order o
 | **Reservations** (Pro) | Guest request form (date, time, party size) → dashboard + email alert (Resend) → accept/decline, guest emailed + one-tap WhatsApp reply |
 | **Multi-language menus** | Owner-entered translations per item/category, language switcher, RTL for Arabic. 1 extra language on Free, 6 on Pro. Optional AI drafts on Pro with open **Gemma** models (Google AI Studio or local Ollama) and a curated **dish glossary** that keeps names like *Misal Pav* intact and flags literal translations |
 | **Menu import** | CSV (Excel/Sheets export) with template + preview + per-line errors. Optional AI import from a menu photo (Gemma vision, Pro) |
-| **Prep planner** (Pro) | Per-dish portion forecast for the next 1–7 days from your own orders (**TabPFN**, a tabular foundation model), unusual-day detection, "86 risk", and a plain-language prep list written by **Gemma**. Runs as a small Python agent on Render's free plan; synthetic demo data (clearly labelled) when there aren't enough orders yet |
+| **Prep planner** (Pro) | Per-dish portion forecast for the next 1–7 days from your own orders (**TabPFN**, a tabular foundation model), unusual-day detection, "86 risk", and a plain-language prep list written by **Gemma**. Runs as a small Python agent on Render's free plan; synthetic demo data (clearly labelled) when there aren't enough orders yet. Festival-aware (Diwali, Ganesh Chaturthi, Eid …), a **Forecast accuracy** backtest against naive baselines, and **Ask the planner** ("how much paneer for Saturday?") |
 | **Team** (Pro) | Invite by email as manager (menu, orders, guests, QR, analytics) or staff (orders only). Enforced server-side |
 | **Share** | Installable PWA with offline menu, iframe embed snippet for existing websites (`/embed/{slug}`), link-in-bio page (`/l/{slug}`), printable branded A4 menu, calories + nutrition |
 | **Weekly digest** (Pro) | Monday email with views, orders, sales, top dishes, ratings and pending reservations (Vercel Cron + Resend; skipped without keys) |
@@ -155,6 +155,8 @@ Owners enter a domain in **Settings → Custom domain** and get DNS instructions
 | `GOOGLE_AI_API_KEY`, `GEMMA_MODEL`, `GEMMA_VISION_MODEL`, `GEMMA_FALLBACK_MODEL` | optional | AI translate + menu-photo import (Pro) on Gemma via Google AI Studio. Default `gemma-3-27b-it`; one retry on `gemma-4-26b-a4b-it` if the id 404s. `GEMINI_API_KEY` still accepted |
 | `OLLAMA_BASE_URL` / `OPENAI_COMPAT_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_VISION_MODEL`, `OPENAI_COMPAT_API_KEY` | optional | Same features on a local/self-hosted Gemma (default `gemma3:4b`) |
 | `AGENT_URL`, `AGENT_SECRET` | optional | Prep planner (Pro): URL of the `/agent` service (e.g. on Render) and the shared secret |
+| `SENTRY_DSN` (+ `SENTRY_TRACES_SAMPLE_RATE`, `SENTRY_ENVIRONMENT`) | optional | Server-side Sentry tracing of the agent calls; no-op when unset |
+| `GEMINI_BASELINE_MODEL` | optional, dev | Closed baseline for `npm run eval:translate -- --scorecard` (default `gemini-3.5-flash-lite`) |
 
 `AUTH_RESEND_KEY` + `EMAIL_FROM` also power reservation alerts, team invites and the weekly digest; without them those emails are skipped and everything else works.
 
@@ -169,7 +171,7 @@ Owners enter a domain in **Settings → Custom domain** and get DNS instructions
 `drizzle/0001_beast.sql` only **adds** tables (`orders`, `service_requests`, `feedback`, `reservations`, `coupons`, `team_members`) and columns with defaults — safe on an existing database. It runs automatically on deploy (`vercel-build`) or with `npm run db:migrate`.
 
 ### Open models, the prep agent and Render
-See **[docs/HACKATHON.md](docs/HACKATHON.md)** for the architecture, setup of Google AI Studio (Gemma), Ollama (local), Prior Labs (TabPFN) and the Render blueprint (`render.yaml` deploys `/agent` on the free plan), the translation eval (`npm run eval:translate`) and TabPFN licensing notes. `drizzle/0002_glossary.sql` adds the `glossary_entries` table (additive, safe on an existing database).
+See **[docs/HACKATHON.md](docs/HACKATHON.md)** for the architecture, setup of Google AI Studio (Gemma), Ollama (local), Prior Labs (TabPFN) and the Render blueprint (`render.yaml` deploys `/agent` on the free plan), the translation eval and open-vs-closed scorecard (`npm run eval:translate -- --scorecard`), the forecast backtest (`npm run prep:export` + `agent/backtest.py`), Ask the planner, festival features, Sentry Agent Tracing, and TabPFN licensing notes. `drizzle/0002_glossary.sql` adds the `glossary_entries` table (additive, safe on an existing database).
 
 ---
 

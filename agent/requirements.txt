@@ -7,3 +7,5 @@ pandas>=2.2
 numpy>=1.26
 # Official Prior Labs client (TabPFN via API). Auth: PRIORLABS_API_KEY or TABPFN_TOKEN.
 tabpfn-client>=0.2
+# Optional tracing (no-op unless SENTRY_DSN is set)
+sentry-sdk[fastapi]>=2.30
