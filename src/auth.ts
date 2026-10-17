@@ -18,7 +18,7 @@ declare module "next-auth" {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
-  // Same check as server start, in case instrumentation didn't run: never guess in production.
+  // Validate production settings when an auth operation actually needs them; do not block public pages.
   assertProductionConfig();
   const db = await getDb();
   const e = env();

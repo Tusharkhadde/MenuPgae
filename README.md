@@ -68,7 +68,7 @@ With no environment variables at all:
 
 To use a real Postgres locally, copy `.env.example` → `.env.local` and set `DATABASE_URL`, then `npm run db:migrate && npm run db:seed`.
 
-These fallbacks are **development only**. In production (`NODE_ENV=production`, i.e. `next start` / Vercel) the server refuses to start and logs one clear list of what's missing if `DATABASE_URL`, `AUTH_SECRET` or a real sign-in method (Google, or Resend + `EMAIL_FROM`) is absent — it never uses PGlite, never prints magic links to the console, and the demo login doesn't count as a sign-in method. `next build` still needs no secrets.
+These fallbacks are **development only**. In production (`NODE_ENV=production`, i.e. `next start` / Vercel), database-backed features and sign-in require `DATABASE_URL`, `AUTH_SECRET` (or legacy `NEXTAUTH_SECRET`) and a real sign-in method (Google, or Resend + `EMAIL_FROM`). Missing settings are reported when those features are used; they do not prevent public pages from loading. Production never uses PGlite, prints magic links to the console, or counts the demo login as a real sign-in method. `next build` still needs no secrets.
 
 ### Scripts
 
@@ -102,7 +102,7 @@ You need accounts on: **GitHub** (have it), **Vercel**, **Neon**, **Cloudflare**
 5. Set `APP_URL` to your final URL (e.g. `https://menupage.vercel.app` or your domain) and redeploy.
 
 ### 3. Auth secret
-`npx auth secret` (or `openssl rand -base64 33`) → `AUTH_SECRET`.
+`npx auth secret` (or `openssl rand -base64 33`) → `AUTH_SECRET`. Existing deployments using `NEXTAUTH_SECRET` continue to work; `AUTH_SECRET` takes precedence if both are set.
 
 ### 4. Google sign-in
 1. <https://console.cloud.google.com> → APIs & Services → OAuth consent screen (External, add your email as test user or publish).
@@ -147,7 +147,7 @@ Owners enter a domain in **Settings → Custom domain** and get DNS instructions
 | `APP_URL` | prod | Public base URL (QR codes, canonical links, billing return URLs) |
 | `DATABASE_URL` | **prod** | Neon pooled connection string |
 | `DATABASE_URL_UNPOOLED` | recommended | Direct connection for migrations |
-| `AUTH_SECRET` | **prod** | Auth.js session encryption |
+| `AUTH_SECRET` (or legacy `NEXTAUTH_SECRET`) | **prod** | Auth.js session encryption |
 | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | **prod: this pair and/or Resend** | Google sign-in |
 | `AUTH_RESEND_KEY`, `EMAIL_FROM` | **prod: this pair and/or Google** | Email magic links. `EMAIL_FROM` must be on a domain verified in Resend |
 | `DEMO_LOGIN_ENABLED` | optional | `true` turns on the hidden judge demo at `/demo`. **Default off** (anything other than `true`) |
@@ -165,7 +165,7 @@ Owners enter a domain in **Settings → Custom domain** and get DNS instructions
 
 `AUTH_RESEND_KEY` + `EMAIL_FROM` also power reservation alerts, team invites and the weekly digest; without them those emails are skipped and everything else works.
 
-`next build` needs **none** of these. A production server checks the required ones at start-up (`src/lib/prod-config.ts`, called from `src/instrumentation.ts`) and fails with one message listing everything missing.
+`next build` needs **none** of these. Auth initialization checks required production settings (`src/lib/prod-config.ts`) and reports what's missing. Public marketing pages do not depend on those settings.
 
 ---
 

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { features } from "@/lib/env";
+import { isProductionRuntime, productionConfigProblems } from "@/lib/prod-config";
 import { getSessionUser } from "@/server/session";
 import { signInWithEmail, signInWithGoogle } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
@@ -26,10 +27,11 @@ const ERRORS: Record<string, string> = {
 export default async function LoginPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const redirectTo = sp.callbackUrl?.startsWith("/") && !sp.callbackUrl.startsWith("//") ? sp.callbackUrl : "/dashboard";
-  if (await getSessionUser()) redirect(redirectTo);
+  const configProblems = isProductionRuntime() ? productionConfigProblems() : [];
+  if (!configProblems.length && (await getSessionUser())) redirect(redirectTo);
 
-  const google = features.google();
-  const email = features.email();
+  const google = configProblems.length ? false : features.google();
+  const email = configProblems.length ? false : features.email();
   const checkEmail = sp.check === "email";
   const error = sp.error ? (ERRORS[sp.error] ?? "Sign-in failed. Please try again.") : null;
   const signup = sp.intent === "signup";
@@ -60,7 +62,15 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
                 {signup ? "Free plan, no card needed." : "Sign in to manage your menu."}
               </p>
               {error && <p className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
-              <div className="mt-6 space-y-3">
+              {configProblems.length > 0 ? (
+                <div className="mt-6 rounded-lg bg-destructive/10 px-3 py-3 text-sm text-destructive">
+                  <p>Sign-in is unavailable because this production deployment is missing required settings:</p>
+                  <ul className="mt-2 list-inside list-disc space-y-1">
+                    {configProblems.map((problem) => <li key={problem}>{problem}</li>)}
+                  </ul>
+                  <p className="mt-2">Add the settings in your hosting provider and redeploy.</p>
+                </div>
+              ) : <div className="mt-6 space-y-3">
                 {google && (
                   <form action={signInWithGoogle}>
                     <input type="hidden" name="redirectTo" value={redirectTo} />
@@ -83,7 +93,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
                 {!google && !email && (
                   <p className="text-sm text-muted-foreground">No sign-in method is configured. Set Google or Resend env vars (see README).</p>
                 )}
-              </div>
+              </div>}
             </>
           )}
         </div>

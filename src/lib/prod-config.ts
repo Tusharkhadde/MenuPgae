@@ -1,6 +1,6 @@
 /**
  * Production configuration checks. Pure functions over an env record (no "server-only", no zod),
- * so they can run from src/instrumentation.ts at server start, from scripts, and from unit tests.
+ * so they can run from auth initialization, scripts, and unit tests.
  *
  * Development and tests are unchanged: nothing here throws unless NODE_ENV is "production"
  * and we are not inside `next build` (which runs with no secrets on CI).
@@ -51,7 +51,7 @@ export function formatConfigProblems(problems: string[]): string {
   return `MenuPage is not configured for production:\n${problems.map((p) => `  - ${p}`).join("\n")}\nSee .env.example and README → "Deploy". (Development is unaffected.)`;
 }
 
-/** Throw one clear error listing every missing production setting. No-op outside a production runtime. */
+/** Throw one clear error listing every missing production setting when auth is initialized. */
 export function assertProductionConfig(e: EnvLike = process.env): void {
   if (!isProductionRuntime(e)) return;
   const problems = productionConfigProblems(e);
