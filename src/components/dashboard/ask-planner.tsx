@@ -7,21 +7,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SectionCard } from "@/components/dashboard/field";
 import { askPlanner } from "@/server/actions/prep";
+import { DemoDataBadge } from "@/components/demo-data-badge";
 import type { AskResult } from "@/lib/prep/types";
 
 const EXAMPLES = ["How much paneer for Saturday?", "Vada pav this weekend?", "Chai for the next 3 days"];
 const fmtDay = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 
 /** "Ask the planner": the language model only routes the question and words the answer; TabPFN gives the numbers. */
-export function AskPlanner(props: { restaurantId: string; source: "orders" | "synthetic"; canUseOrders: boolean }) {
+/** Rendered only once the data is ready. demo=true → the server answers from synthetic "Demo data". */
+export function AskPlanner(props: { restaurantId: string; demo: boolean }) {
   const [q, setQ] = useState("");
   const [res, setRes] = useState<AskResult | null>(null);
   const [pending, start] = useTransition();
-  const src = props.canUseOrders ? props.source : "synthetic";
 
   const ask = (question: string) =>
     start(async () => {
-      const out = await askPlanner(props.restaurantId, { question, source: src });
+      const out = await askPlanner(props.restaurantId, { question });
       if (!out.ok) {
         toast.error(out.error);
         return;
@@ -61,10 +62,17 @@ export function AskPlanner(props: { restaurantId: string; source: "orders" | "sy
           </Button>
         ))}
       </div>
-      {src === "synthetic" && <p className="text-xs text-muted-foreground">Answers use synthetic demo data (not real sales).</p>}
+      {props.demo ? (
+        <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <DemoDataBadge /> Answers use synthetic orders from the demo menu (not real sales).
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">Answers use only your real orders.</p>
+      )}
 
       {res && (
         <div className="space-y-3">
+          {res.synthetic && <DemoDataBadge />}
           <p className="rounded-xl border bg-muted/30 p-3 text-sm">{res.answer}</p>
           {res.rows.length > 0 && (
             <div className="overflow-x-auto">

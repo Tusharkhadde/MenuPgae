@@ -12,8 +12,8 @@ function shortId() {
 }
 
 /**
- * Creates a throwaway sandbox account with its own copy of the demo café, so
- * visitors can edit freely without touching the public demo. Sandboxes older
+ * Judge demo (/demo, only when DEMO_LOGIN_ENABLED=true): creates a throwaway sandbox account
+ * with its own copy of the fictional demo café ("Demo data" everywhere it appears). Sandboxes older
  * than 24h are deleted (cascades to their restaurants, menus and analytics).
  */
 export async function createDemoAccount() {
@@ -23,7 +23,7 @@ export async function createDemoAccount() {
   const id = shortId();
   const [user] = await db
     .insert(users)
-    .values({ name: "Demo Owner", email: `demo-${id}@demo.menupage.invalid`, isDemo: true })
+    .values({ name: "Demo judge", email: `demo-${id}@demo.menupage.invalid`, isDemo: true })
     .returning();
 
   const [restaurant] = await db
@@ -32,7 +32,7 @@ export async function createDemoAccount() {
       ...DEMO_RESTAURANT,
       ownerId: user.id,
       slug: `demo-${id}`,
-      name: "Chai & Crumbs (sandbox)",
+      name: "Chai & Crumbs (Demo data · sandbox)",
       published: true,
     })
     .returning({ id: restaurants.id });

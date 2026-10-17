@@ -56,7 +56,7 @@ export function historyDays(rows: HistoryRow[]): number {
   return new Set(rows.map((r) => r.date)).size;
 }
 
-/** Fewer days than this and the page suggests the synthetic demo dataset instead. */
+/** Days with orders a real restaurant needs before the prep plan and "Ask the planner" work. */
 export const MIN_HISTORY_DAYS = 14;
 
 /** The backtest needs this many days with orders: 14 to learn from + a 14-day holdout. */

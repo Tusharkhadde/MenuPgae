@@ -6,6 +6,7 @@ import { categories, coupons, items, restaurants, users, type Category, type Ite
 import { getPlanForUser } from "@/server/session";
 import { hasFeature, limitsFor, showBadge } from "@/lib/limits";
 import type { PlanId } from "@/config/plans";
+import { features } from "@/lib/env";
 
 export type PublicMenu = {
   restaurant: Restaurant;
@@ -32,6 +33,9 @@ async function load(where: ReturnType<typeof eq>): Promise<PublicMenu | null> {
     .limit(1);
   if (!row) return null;
   const r = row.restaurant;
+  const isDemo = row.isDemo || r.slug === "demo";
+  // Demo restaurants (fictional "Demo data") only exist for the hidden judge demo.
+  if (isDemo && !features.demo()) return null;
   const [cats, its, plan, siblings, activeCoupons] = await Promise.all([
     db.select().from(categories).where(eq(categories.restaurantId, r.id)).orderBy(asc(categories.position), asc(categories.createdAt)),
     db.select().from(items).where(eq(items.restaurantId, r.id)).orderBy(asc(items.position), asc(items.createdAt)),
@@ -53,7 +57,7 @@ async function load(where: ReturnType<typeof eq>): Promise<PublicMenu | null> {
       })
       .filter((c) => c.items.length > 0),
     showBadge: showBadge(plan),
-    isDemo: row.isDemo || r.slug === "demo",
+    isDemo,
     plan,
     features: {
       coupons: hasFeature(plan, "coupons") && activeCoupons.length > 0,

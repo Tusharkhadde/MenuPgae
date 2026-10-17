@@ -21,7 +21,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: "Do you track my customers?",
-    a: "No cookies and no personal data. We count page views, QR scans and WhatsApp order taps so you can see what's working — that's it.",
+    a: "Analytics use no cookies and store no personal data: we count page views, QR scans and WhatsApp order taps so you can see what's working. A guest's name or phone number is only saved when they type it in to place an order or request a table, and only you (and your team) can see it.",
   },
   {
     q: "Can I use my own domain?",

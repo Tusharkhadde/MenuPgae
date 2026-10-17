@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { resolveAiConfig, type AiConfig } from "@/lib/ai/config";
+import { demoLoginEnabled } from "@/lib/prod-config";
 
 /**
  * Environment access. Validation is lazy (on first use at runtime) so that
@@ -93,9 +94,10 @@ export function appUrl(): string {
 
 export const features = {
   google: () => !!(env().AUTH_GOOGLE_ID && env().AUTH_GOOGLE_SECRET),
-  /** Magic links work via Resend, or in development by printing the link to the server console. */
+  /** Magic links via Resend. Only in development (never in production) is the link printed to the server console instead. */
   email: () => !!env().AUTH_RESEND_KEY || !isProd(),
-  demo: () => (env().DEMO_LOGIN_ENABLED ?? "true") !== "false",
+  /** Hidden judge demo (/demo sandbox login + demo restaurants). OFF unless DEMO_LOGIN_ENABLED=true. */
+  demo: () => demoLoginEnabled({ DEMO_LOGIN_ENABLED: env().DEMO_LOGIN_ENABLED }),
   r2: () => {
     const e = env();
     return !!(e.R2_ACCOUNT_ID && e.R2_ACCESS_KEY_ID && e.R2_SECRET_ACCESS_KEY && e.R2_BUCKET && e.R2_PUBLIC_URL);

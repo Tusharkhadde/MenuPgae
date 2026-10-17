@@ -30,12 +30,3 @@ export async function signInWithEmail(formData: FormData) {
     throw err;
   }
 }
-
-export async function signInAsDemo() {
-  try {
-    await signIn("demo", { redirectTo: "/dashboard" });
-  } catch (err) {
-    if (err instanceof AuthError) redirect("/login?error=DemoLimit");
-    throw err;
-  }
-}

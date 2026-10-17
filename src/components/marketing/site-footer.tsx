@@ -11,7 +11,7 @@ export function SiteFooter() {
             QR menus and one-page websites for restaurants, cafés and food stalls — made to load fast on any phone.
           </p>
         </div>
-        <FooterCol title="Product" links={[["Features", "/#features"], ["Pricing", "/pricing"], ["Live demo", "/r/demo"]]} />
+        <FooterCol title="Product" links={[["Features", "/#features"], ["Pricing", "/pricing"]]} />
         <FooterCol title="Help" links={[["FAQ", "/#faq"], ["Sign in", "/login"]]} />
         <FooterCol title="Legal" links={[["Terms", "/terms"], ["Privacy", "/privacy"]]} />
       </div>

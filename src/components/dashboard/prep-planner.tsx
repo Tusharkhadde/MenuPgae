@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ChefHatIcon, FlaskConicalIcon, Loader2Icon, TriangleAlertIcon } from "lucide-react";
+import { ChefHatIcon, Loader2Icon, TriangleAlertIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,9 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Field, SectionCard } from "@/components/dashboard/field";
 import { AskPlanner } from "@/components/dashboard/ask-planner";
 import { ForecastAccuracy } from "@/components/dashboard/forecast-accuracy";
+import { PrepReadinessProgress } from "@/components/dashboard/prep-readiness";
+import { DemoDataBadge } from "@/components/demo-data-badge";
+import { needsMoreDays, prepReadiness } from "@/lib/prep/readiness";
 import { generatePrepPlan } from "@/server/actions/prep";
 import type { PrepPlan } from "@/lib/prep/types";
 import { cn } from "@/lib/utils";
@@ -16,16 +19,21 @@ import { cn } from "@/lib/utils";
 const fmtDay = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 const n0 = (v: number) => Math.round(v).toLocaleString("en-IN");
 
-export function PrepPlanner(props: { restaurantId: string; orderCount: number; orderDays: number; minDays: number; syntheticOnly: boolean }) {
-  const enoughData = props.orderDays >= props.minDays;
-  const [source, setSource] = useState<"orders" | "synthetic">(props.syntheticOnly || !enoughData ? "synthetic" : "orders");
+/**
+ * demo=true only for demo sandbox accounts (hidden judge demo): everything runs on synthetic "Demo data".
+ * Real accounts only ever use their own orders; until they have enough, an honest progress state is shown.
+ */
+export function PrepPlanner(props: { restaurantId: string; demo: boolean; orderCount: number; orderDays: number }) {
+  const readiness = prepReadiness(props.orderDays);
+  const plannerReady = props.demo || readiness.planner.ready;
+  const accuracyReady = props.demo || readiness.accuracy.ready;
   const [horizon, setHorizon] = useState(3);
   const [plan, setPlan] = useState<PrepPlan | null>(null);
   const [pending, start] = useTransition();
 
   const runPlan = () =>
     start(async () => {
-      const res = await generatePrepPlan(props.restaurantId, { horizonDays: horizon, source });
+      const res = await generatePrepPlan(props.restaurantId, { horizonDays: horizon });
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -36,20 +44,31 @@ export function PrepPlanner(props: { restaurantId: string; orderCount: number; o
   const dates = plan ? [...new Set(plan.forecast.map((f) => f.date))].sort() : [];
   const itemsSorted = plan ? [...new Set(plan.forecast.map((f) => f.item))].sort((a, b) => total(plan, b) - total(plan, a)) : [];
 
+  const intro =
+    "Forecasts how many portions of each dish you'll sell, from your order history, with TabPFN (an open tabular foundation model). Gemma (an open model) writes the prep list. Numbers always come from the forecast, never from the language model.";
+
+  if (!plannerReady) {
+    return (
+      <div className="space-y-6">
+        <SectionCard title={`Prep planner · ${needsMoreDays(readiness.planner.needed)}`} description={intro}>
+          <PrepReadinessProgress readiness={readiness} />
+        </SectionCard>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <SectionCard
-        title="Prep planner"
-        description="Forecasts how many portions of each dish you'll sell, from your order history, with TabPFN (an open tabular foundation model). Gemma (an open model) writes the prep list. Numbers always come from the forecast, never from the language model."
-      >
+      {props.demo && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+          <DemoDataBadge />
+          <span>Demo sandbox: the planner runs on synthetic orders generated from the demo menu — not real sales. Real restaurants use only their own orders.</span>
+        </div>
+      )}
+      <SectionCard title="Prep planner" description={intro}>
         <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="Data" htmlFor="prep-source" hint={enoughData ? `${props.orderCount} orders on ${props.orderDays} days (last 90)` : `${props.orderDays} days with orders — needs ${props.minDays}+`}>
-            <NativeSelect id="prep-source" value={source} onChange={(e) => setSource(e.target.value as "orders" | "synthetic")} disabled={pending}>
-              <option value="orders" disabled={props.syntheticOnly || !enoughData}>
-                My real orders
-              </option>
-              <option value="synthetic">Synthetic demo data (not real sales)</option>
-            </NativeSelect>
+          <Field label="Data" hint={props.demo ? "Synthetic demo data (not real sales)" : `${props.orderCount} orders on ${props.orderDays} days (last 90)`}>
+            <p className="flex h-9 items-center text-sm font-medium">{props.demo ? "Demo data" : "My real orders"}</p>
           </Field>
           <Field label="Days ahead" htmlFor="prep-horizon" hint="Starting tomorrow">
             <NativeSelect id="prep-horizon" value={String(horizon)} onChange={(e) => setHorizon(Number(e.target.value))} disabled={pending}>
@@ -66,20 +85,18 @@ export function PrepPlanner(props: { restaurantId: string; orderCount: number; o
             </Button>
           </div>
         </div>
-        {props.syntheticOnly && <p className="text-xs text-muted-foreground">Demo account: the planner runs on synthetic data only. Pro restaurants use their real orders.</p>}
+        {!props.demo && !readiness.accuracy.ready && <PrepReadinessProgress readiness={readiness} />}
         {pending && <p className="text-xs text-muted-foreground">The first run can take up to a minute while the forecasting agent wakes up.</p>}
       </SectionCard>
 
-      <AskPlanner restaurantId={props.restaurantId} source={source} canUseOrders={!props.syntheticOnly && enoughData} />
+      <AskPlanner restaurantId={props.restaurantId} demo={props.demo} />
 
       {plan && (
         <>
           {plan.synthetic && (
-            <div className="flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-              <FlaskConicalIcon className="mt-0.5 size-4 shrink-0" />
-              <p>
-                <strong>Synthetic demo data.</strong> This plan was built from generated orders based on your menu — not real sales. Use it to see how the planner works.
-              </p>
+            <div className="flex flex-wrap items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+              <DemoDataBadge />
+              <p>This plan was built from synthetic orders generated from the demo menu — not real sales.</p>
             </div>
           )}
 
@@ -115,7 +132,7 @@ export function PrepPlanner(props: { restaurantId: string; orderCount: number; o
             </p>
           </SectionCard>
 
-          <SectionCard title="Forecast" description={`Portions per dish per day. Range is the 10th–90th percentile; "prep" is the 75th percentile, which the prep list uses. Learned from ${plan.data.days} days of ${plan.synthetic ? "synthetic" : "real"} orders.`}>
+          <SectionCard title="Forecast" description={`Portions per dish per day. Range is the 10th–90th percentile; "prep" is the 75th percentile, which the prep list uses. Learned from ${plan.data.days} days of ${plan.synthetic ? "synthetic demo" : "real"} orders.`}>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -197,7 +214,7 @@ export function PrepPlanner(props: { restaurantId: string; orderCount: number; o
         </>
       )}
 
-      <ForecastAccuracy restaurantId={props.restaurantId} source={source} canUseOrders={!props.syntheticOnly && props.orderDays >= 28} />
+      <ForecastAccuracy restaurantId={props.restaurantId} demo={props.demo} ready={accuracyReady} neededDays={readiness.accuracy.needed} />
     </div>
   );
 }

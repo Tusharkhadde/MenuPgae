@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { FlaskConicalIcon, Loader2Icon, TargetIcon } from "lucide-react";
+import { Loader2Icon, TargetIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SectionCard } from "@/components/dashboard/field";
 import { runBacktest } from "@/server/actions/prep";
+import { DemoDataBadge } from "@/components/demo-data-badge";
+import { needsMoreDays } from "@/lib/prep/readiness";
 import type { BacktestModel, BacktestResult } from "@/lib/prep/types";
 
 const ORDER: BacktestModel[] = ["tabpfn", "last_week", "weekday_mean_4w"];
@@ -17,14 +19,13 @@ const num = (v: number) => v.toFixed(2);
  * "Forecast accuracy" — runs the agent's backtest on demand and shows exactly what it returns.
  * No numbers are stored or pre-filled; until the owner presses the button the card shows none.
  */
-export function ForecastAccuracy(props: { restaurantId: string; source: "orders" | "synthetic"; canUseOrders: boolean }) {
+export function ForecastAccuracy(props: { restaurantId: string; demo: boolean; ready: boolean; neededDays: number }) {
   const [res, setRes] = useState<BacktestResult | null>(null);
   const [pending, start] = useTransition();
-  const src = props.canUseOrders ? props.source : "synthetic";
 
   const run = () =>
     start(async () => {
-      const out = await runBacktest(props.restaurantId, { holdoutDays: 14, source: src });
+      const out = await runBacktest(props.restaurantId, { holdoutDays: 14 });
       if (!out.ok) {
         toast.error(out.error);
         return;
@@ -38,17 +39,25 @@ export function ForecastAccuracy(props: { restaurantId: string; source: "orders"
       description="How good is the forecast, honestly? We hide the last 14 days, forecast them with TabPFN using only the days before, and compare with what you'd otherwise guess: the same weekday last week, or the average of the last 4 same weekdays."
     >
       <div className="flex flex-wrap items-center gap-3">
-        <Button onClick={run} disabled={pending} variant="outline">
+        <Button onClick={run} disabled={pending || !props.ready} variant="outline">
           {pending ? <Loader2Icon className="animate-spin" /> : <TargetIcon />} {pending ? "Backtesting…" : "Run backtest"}
         </Button>
-        <span className="text-xs text-muted-foreground">Data: {src === "synthetic" ? "synthetic demo data (not real sales)" : "your real orders"} · needs 28+ days</span>
+        {props.demo ? (
+          <span className="flex items-center gap-2 text-xs text-muted-foreground">
+            <DemoDataBadge /> synthetic orders, not real sales
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">
+            Data: your real orders · {props.ready ? "28+ days" : `${needsMoreDays(props.neededDays)} (needs 28)`}
+          </span>
+        )}
       </div>
 
       {res && (
         <div className="space-y-4">
           {res.synthetic && (
-            <p className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
-              <FlaskConicalIcon className="size-3.5" /> Synthetic demo data — these scores say how the method behaves, not how it does on a real kitchen.
+            <p className="flex flex-wrap items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
+              <DemoDataBadge /> These scores say how the method behaves on synthetic orders, not how it does in a real kitchen.
             </p>
           )}
           <p className="text-sm text-muted-foreground">

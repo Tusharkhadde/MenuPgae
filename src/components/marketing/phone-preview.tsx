@@ -7,10 +7,10 @@ const rows = [
   { name: "Paneer Tikka Sandwich", desc: "Charred paneer on sourdough", price: "₹180", diet: "veg" as const },
 ];
 
-/** Illustrative phone mockup of a menu page (sample content, not a real customer). */
+/** Illustrative phone mockup of a menu page. Invented content, not a real restaurant or customer — always captioned as such. */
 export function PhonePreview() {
   return (
-    <div className="relative mx-auto w-[300px] select-none" aria-label="Example of a MenuPage menu on a phone">
+    <div className="relative mx-auto w-[300px] select-none" aria-label="Illustrative example of a MenuPage menu on a phone (not a real restaurant)">
       <div className="absolute -inset-10 -z-10 rounded-[64px] bg-[radial-gradient(closest-side,color-mix(in_oklch,var(--primary)_28%,transparent),transparent)] blur-2xl" />
       <div className="rounded-[44px] border border-black/10 bg-neutral-900 p-2.5 shadow-2xl shadow-black/30 dark:border-white/10">
         <div className="menu-theme overflow-hidden rounded-[36px]" data-theme="classic">

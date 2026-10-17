@@ -3,7 +3,7 @@
 DEV / Hacktoberfest "Side Hustle" challenge: *build something with open-weight / open-source AI at its core that someone would pay for.*
 Target categories: **Best Use of Gemma**, **Best Use of TabPFN (Prior Labs)**, **Best Use of Render**, plus the **Sentry Agent Tracing** partner prize.
 
-MenuPage is a QR-menu + one-page-website SaaS for small Indian restaurants and food stalls (Pro placeholder price ₹299/month, see `src/config/plans.ts`). This branch puts two open models at the centre of the two Pro features owners would actually pay for:
+MenuPage is a QR-menu + one-page-website SaaS for small Indian restaurants and food stalls (Pro price is set on the Dodo Payments product and shown at checkout; none is hard-coded). This branch puts two open models at the centre of the two Pro features owners would actually pay for:
 
 | Feature | Open piece that makes it work | Where |
 | --- | --- | --- |
@@ -16,6 +16,16 @@ MenuPage is a QR-menu + one-page-website SaaS for small Indian restaurants and f
 | **Agent tracing** | Sentry spans for Gemma + TabPFN calls | `agent/app/tracing.py`, `src/instrumentation.ts` (§11) |
 
 > Nothing in this document is a measured result yet. Every number in the DEV post outline below is a placeholder to be filled from real runs (`npm run eval:translate`, a real restaurant's prep plan). No testimonials, user counts or metrics are invented anywhere in the repo.
+
+## For judges: try it in 2 minutes
+
+The public site is the real product — no demo links, no sample data shown to real accounts. For judging there is one hidden, clearly-labelled demo:
+
+1. **Tushar (before judging):** Vercel → Project → Settings → Environment Variables → set `DEMO_LOGIN_ENABLED=true` (Production) → **Redeploy**. Turn it back off (delete it or set `false`, then redeploy) when judging ends.
+2. **Judges:** open **`<APP_URL>/demo`** (e.g. `https://menupage-topaz.vercel.app/demo`) → **Open the demo dashboard**. You get a private 24-hour sandbox with a fictional café, *Chai & Crumbs*. Everything about it is labelled **"Demo data"**: the dashboard banner, the restaurant name, its public menu banner, and the prep planner, forecast accuracy and Ask the planner (which run on synthetic orders generated from the demo menu, because a brand-new sandbox has no real sales).
+3. Try: edit the menu, open the public menu link and build a WhatsApp order (nothing is sent from a demo restaurant), then **Insights → Prep planner** (needs the Render agent: `AGENT_URL` + `AGENT_SECRET`).
+
+With `DEMO_LOGIN_ENABLED` unset or anything other than `true`, `/demo` and all demo restaurant pages return 404. `/demo` is noindex and disallowed in robots.txt; nothing on the site links to it. Real accounts never see synthetic data: their prep planner shows "Needs N more days of orders" with progress toward 28 days until their own order history is long enough.
 
 ---
 
@@ -76,7 +86,7 @@ It prints a markdown table (parsed?, entries returned, names kept, literal traps
 
 ## 2. Why open models (the business case)
 
-- **Cost at a ₹299/month price point.** A small restaurant translates its menu a handful of times and runs a prep plan at most daily. Gemma is available on Google AI Studio's free tier and runs locally via Ollama at zero marginal cost; there is no per-seat AI bill that eats the margin. (Check current free-tier limits at <https://ai.google.dev/pricing> before quoting them.)
+- **Cost at a small-restaurant price point.** A small restaurant translates its menu a handful of times and runs a prep plan at most daily. Gemma is available on Google AI Studio's free tier and runs locally via Ollama at zero marginal cost; there is no per-seat AI bill that eats the margin. (Check current free-tier limits at <https://ai.google.dev/pricing> before quoting them.)
 - **Local / offline.** `AI_PROVIDER=ollama` + `gemma3:4b` runs translation and photo import on a laptop with no cloud and no key — useful for a self-hosted install or a café with patchy internet.
 - **Glossary + model swap.** The domain knowledge (what "misal" is) lives in an editable glossary, not in a proprietary model. Swapping `gemma-3-27b-it` → `gemma-3-12b-it` → a local `gemma3:4b` is one env var, and the eval script shows what each swap costs in quality.
 - **No lock-in.** The provider layer speaks the generic Google `generateContent` and OpenAI-compatible chat APIs; anything that serves Gemma (Ollama, LM Studio, llama.cpp, vLLM) works.
@@ -115,14 +125,14 @@ AI_PROVIDER=ollama OLLAMA_BASE_URL=http://localhost:11434 npm run dev
 4. Vercel: set `AGENT_URL=https://<service>.onrender.com` and `AGENT_SECRET=<same value>`, redeploy.
 5. Free instances sleep after inactivity; the first prep plan after a nap can take about a minute (the page says so). The Next.js app stays on Vercel ($0 hosting rule).
 
-### Try it without real orders
-Dashboard → a restaurant → **Prep planner** → Data: *Synthetic demo data*. The history is generated from that restaurant's own menu (weekend lift, meal-time profiles, a holiday bump, one injected spike and one sell-out) and every screen labels it as synthetic. Demo sandbox accounts can run it on synthetic data; real-order forecasts are Pro.
+### Try it without real orders (judge demo only)
+Open `/demo` (needs `DEMO_LOGIN_ENABLED=true`) → **Insights → Prep planner**. Demo sandbox accounts always run on synthetic history generated from the demo menu (weekend lift, meal-time profiles, a holiday bump, one injected spike and one sell-out), labelled **"Demo data"** on every screen. The source is chosen on the server from the account (`historySourceFor`), so a real account can't select it. Real accounts (Pro) use only their own orders and see an honest progress state until they have 14 days (prep plan, Ask the planner) and 28 days (forecast accuracy).
 
 ---
 
 ## 4. Draft DEV post outline
 
-**Title idea:** "I taught an open model what *misal pav* is — and built a prep planner for ₹299/month restaurants"
+**Title idea:** "I taught an open model what *misal pav* is — and built a prep planner for small restaurants"
 
 1. **Hook** — the problem: small Indian restaurants, QR menus, guests from elsewhere; machine translation turns *Vada Pav* into "potato bread burger"; owners over- or under-prep every weekend.
    - _[FIRST-USER STORY: real restaurant/vendor, with their permission — what they said, what changed. Leave out until it exists.]_
@@ -139,10 +149,10 @@ Dashboard → a restaurant → **Prep planner** → Data: *Synthetic demo data*.
    - Quantile forecast → prep = 75th percentile; out-of-sample anomaly check; 86 risk.
    - Screenshot of a prep plan _[label synthetic if it is]_; real-data run _[only if a restaurant agrees]_.
 5. **Render** — `render.yaml`, free plan, health check, cold-start trade-off and why the web app stays on Vercel.
-6. **Why open = a viable business** — cost at ₹299, offline mode, no lock-in, licensing caveat for TabPFN (section 2).
+6. **Why open = a viable business** — running cost per restaurant _[real numbers only]_, offline mode, no lock-in, licensing caveat for TabPFN (section 2).
 7. **Proof, not vibes** — forecast accuracy table (§7), open vs closed scorecard (§8), Sentry trace screenshot (§11). _[paste real outputs only]_
 8. **What's next** — owner-entered local festivals/events, stock levels for real 86 alerts, self-hosted TabPFNv2.
-9. **Links** — repo, demo `/r/demo`, docs.
+9. **Links** — repo, judge demo `/demo` (enabled only during judging), docs.
 
 ---
 
@@ -255,6 +265,6 @@ Optional and fully no-op without `SENTRY_DSN` (tested on both sides).
 2. In MenuPage: Prep planner → ask *"How much paneer for Saturday?"*, then *Build prep plan*, then *Run backtest*.
 3. Sentry → the **Agents** dashboard (Agent Tracing; under Insights in some Sentry versions): screenshot the agent run list and one trace showing `invoke_agent prep-planner` with its `chat` and `execute_tool` children; open a `chat` span and screenshot the model + token attributes.
 4. Sentry → **Explore → Traces**: open the trace that starts at the Vercel `prep-agent ask` span and continues into the Render agent — screenshot the waterfall (shows Render cold start vs TabPFN vs Gemma time).
-5. Blur the DSN/org slug if visible. Don't screenshot real customer data; use the synthetic demo.
+5. Blur the DSN/org slug if visible. Don't screenshot real customer data; use the judge demo (`/demo`, labelled "Demo data").
 
 _[screenshots: agents dashboard, trace waterfall, chat span attributes]_

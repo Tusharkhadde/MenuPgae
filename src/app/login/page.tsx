@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { MailCheckIcon, SparklesIcon } from "lucide-react";
+import { MailCheckIcon } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { features } from "@/lib/env";
 import { getSessionUser } from "@/server/session";
-import { signInAsDemo, signInWithEmail, signInWithGoogle } from "./actions";
+import { signInWithEmail, signInWithGoogle } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +18,6 @@ const ERRORS: Record<string, string> = {
   InvalidEmail: "Enter a valid email address.",
   TooMany: "Too many sign-in attempts. Please wait a few minutes.",
   EmailSignin: "We couldn't send the sign-in email. Please try again.",
-  DemoLimit: "Demo limit reached for now. Try again later or create a free account.",
   OAuthAccountNotLinked: "This email is already linked to another sign-in method. Use the one you signed up with.",
   Verification: "That sign-in link has expired or was already used. Request a new one.",
   Configuration: "Sign-in isn't fully configured on this server yet.",
@@ -31,7 +30,6 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
 
   const google = features.google();
   const email = features.email();
-  const demo = features.demo();
   const checkEmail = sp.check === "email";
   const error = sp.error ? (ERRORS[sp.error] ?? "Sign-in failed. Please try again.") : null;
   const signup = sp.intent === "signup";
@@ -82,20 +80,10 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
                     <SubmitButton className="h-10 w-full">Email me a sign-in link</SubmitButton>
                   </form>
                 )}
-                {!google && !email && !demo && (
+                {!google && !email && (
                   <p className="text-sm text-muted-foreground">No sign-in method is configured. Set Google or Resend env vars (see README).</p>
                 )}
               </div>
-              {demo && (
-                <div className="mt-6 border-t pt-5">
-                  <form action={signInAsDemo}>
-                    <SubmitButton variant="secondary" className="h-10 w-full">
-                      <SparklesIcon /> Try the dashboard with a demo account
-                    </SubmitButton>
-                  </form>
-                  <p className="mt-2 text-center text-xs text-muted-foreground">A private sandbox with a sample café. Deleted after 24 hours.</p>
-                </div>
-              )}
             </>
           )}
         </div>

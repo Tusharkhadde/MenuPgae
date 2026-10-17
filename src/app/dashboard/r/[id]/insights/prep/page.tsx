@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { and, count, eq, gte } from "drizzle-orm";
+import { and, count, eq, gte, ne } from "drizzle-orm";
 import { requireRestaurantAccess, getPlanForUser } from "@/server/session";
 import { hasFeature } from "@/lib/limits";
 import { features } from "@/lib/env";
 import { getDb } from "@/lib/db";
 import { orders } from "@/lib/db/schema";
 import { localDate } from "@/lib/schedule";
-import { addDays, MIN_HISTORY_DAYS } from "@/lib/prep/history";
+import { addDays } from "@/lib/prep/history";
+import { historySourceFor } from "@/lib/prep/readiness";
 import { SectionCard } from "@/components/dashboard/field";
 import { Button } from "@/components/ui/button";
 import { PrepPlanner } from "@/components/dashboard/prep-planner";
@@ -20,10 +21,11 @@ export default async function PrepPage({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const { user, restaurant } = await requireRestaurantAccess(id, "manager");
   const plan = await getPlanForUser(restaurant.ownerId);
-  const allowed = hasFeature(plan, "prepPlanner");
-  const demoPreview = !allowed && user.isDemo;
+  // Demo sandbox accounts (hidden judge demo) see synthetic "Demo data" only; real accounts only their own orders.
+  const demo = historySourceFor(user) === "synthetic";
+  const allowed = demo || hasFeature(plan, "prepPlanner");
 
-  if (!allowed && !demoPreview) {
+  if (!allowed) {
     return (
       <SectionCard title="Prep planner" description="Know how much to prep before the rush.">
         <p className="text-sm text-muted-foreground">
@@ -51,24 +53,16 @@ export default async function PrepPage({ params }: { params: Promise<{ id: strin
     );
   }
 
+  if (demo) return <PrepPlanner restaurantId={restaurant.id} demo orderCount={0} orderDays={0} />;
+
+  // Same window and filter as the history the agent receives (last 90 days, cancelled orders excluded).
   const db = await getDb();
   const since = addDays(localDate(new Date(), restaurant.timezone), -90);
-  const [{ n }] = await db
-    .select({ n: count() })
-    .from(orders)
-    .where(and(eq(orders.restaurantId, restaurant.id), gte(orders.day, since)));
-  const days = await db
-    .selectDistinct({ day: orders.day })
-    .from(orders)
-    .where(and(eq(orders.restaurantId, restaurant.id), gte(orders.day, since)));
+  const where = and(eq(orders.restaurantId, restaurant.id), gte(orders.day, since), ne(orders.status, "cancelled"));
+  const [[{ n }], days] = await Promise.all([
+    db.select({ n: count() }).from(orders).where(where),
+    db.selectDistinct({ day: orders.day }).from(orders).where(where),
+  ]);
 
-  return (
-    <PrepPlanner
-      restaurantId={restaurant.id}
-      orderCount={n}
-      orderDays={days.length}
-      minDays={MIN_HISTORY_DAYS}
-      syntheticOnly={demoPreview}
-    />
-  );
+  return <PrepPlanner restaurantId={restaurant.id} demo={false} orderCount={n} orderDays={days.length} />;
 }
