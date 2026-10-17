@@ -32,6 +32,12 @@ describe("production config", () => {
     expect(problems).toMatch(/No sign-in method/);
   });
 
+  it("accepts the legacy NEXTAUTH_SECRET setting", () => {
+    const legacySecretEnv = { ...FULL, AUTH_SECRET: undefined, NEXTAUTH_SECRET: "legacy-secret" };
+    expect(productionConfigProblems(legacySecretEnv)).toEqual([]);
+    expect(() => assertProductionConfig(legacySecretEnv)).not.toThrow();
+  });
+
   it("throws loudly in a production runtime, listing all problems at once", () => {
     expect(() => assertProductionConfig({ NODE_ENV: "production" })).toThrow(/DATABASE_URL[\s\S]*AUTH_SECRET[\s\S]*sign-in/);
   });

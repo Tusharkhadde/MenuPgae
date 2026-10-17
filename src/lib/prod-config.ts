@@ -32,7 +32,9 @@ export function realSignInMethods(e: EnvLike = process.env): ("google" | "email"
 export function productionConfigProblems(e: EnvLike = process.env): string[] {
   const problems: string[] = [];
   if (!set(e.DATABASE_URL)) problems.push("DATABASE_URL is not set (Neon pooled connection string). Production never falls back to the embedded PGlite database.");
-  if (!set(e.AUTH_SECRET)) problems.push("AUTH_SECRET is not set (generate one with `npx auth secret`).");
+  if (!set(e.AUTH_SECRET) && !set(e.NEXTAUTH_SECRET)) {
+    problems.push("AUTH_SECRET is not set (generate one with `npx auth secret`; legacy NEXTAUTH_SECRET is also supported).");
+  }
   if (set(e.AUTH_GOOGLE_ID) !== set(e.AUTH_GOOGLE_SECRET)) problems.push("Google sign-in is half-configured: set both AUTH_GOOGLE_ID and AUTH_GOOGLE_SECRET, or neither.");
   if (realSignInMethods(e).length === 0) {
     problems.push(

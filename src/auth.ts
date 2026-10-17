@@ -23,7 +23,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
   const db = await getDb();
   const e = env();
 
-  const secret = e.AUTH_SECRET ?? (isProd() ? undefined : "menupage-development-secret-change-me");
+  const secret = e.AUTH_SECRET ?? e.NEXTAUTH_SECRET ?? (isProd() ? undefined : "menupage-development-secret-change-me");
   if (!secret) throw new Error("AUTH_SECRET is not set. Generate one with `npx auth secret` (see README).");
 
   const providers: NextAuthConfig["providers"] = [];

@@ -18,6 +18,7 @@ const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: optional,
   AUTH_SECRET: optional,
+  NEXTAUTH_SECRET: optional,
   APP_URL: optional,
   AUTH_URL: optional,
   AUTH_GOOGLE_ID: optional,
