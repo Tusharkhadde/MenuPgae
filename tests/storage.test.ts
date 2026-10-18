@@ -118,7 +118,7 @@ describe("Cloudinary storage", () => {
   });
 
   it("throws StorageNotConfiguredError in production when neither Cloudinary nor R2 is configured", async () => {
-    process.env.NODE_ENV = "production";
+    (process.env as Record<string, string | undefined>).NODE_ENV = "production";
     delete process.env.CLOUDINARY_URL;
     delete process.env.CLOUDINARY_CLOUD_NAME;
     delete process.env.CLOUDINARY_API_KEY;

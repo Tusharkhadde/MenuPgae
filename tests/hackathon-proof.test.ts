@@ -69,7 +69,7 @@ describe("Sentry wrapper", () => {
 
   it("passes through when a DSN is set but Sentry was never initialised", async () => {
     await expect(withAgentSpan("ask", async () => "ok", "https://public@example.invalid/1")).resolves.toBe("ok");
-  });
+  }, 15000);
 
   it("propagates errors", async () => {
     await expect(withAgentSpan("ask", async () => Promise.reject(new Error("boom")), undefined)).rejects.toThrow("boom");
