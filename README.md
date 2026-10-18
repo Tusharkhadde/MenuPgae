@@ -115,7 +115,14 @@ You need accounts on: **GitHub** (have it), **Vercel**, **Neon**, **Cloudflare**
 2. Domains → add and verify your domain (DNS records), then set `EMAIL_FROM="MenuPage <login@yourdomain.com>"`.
    (Without a verified domain Resend only delivers to your own address from `onboarding@resend.dev`.)
 
-### 6. Cloudflare R2 (images)
+### 6. Image storage (Cloudinary or Cloudflare R2)
+
+**Option A: Cloudinary (simplest)**
+1. Sign up / log in to [Cloudinary](https://cloudinary.com).
+2. Go to Dashboard / API Keys → copy your **Cloud Name**, **API Key**, and **API Secret**.
+3. Set in Vercel: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (or `CLOUDINARY_URL=cloudinary://<key>:<secret>@<cloud>`).
+
+**Option B: Cloudflare R2 (10 GB free)**
 1. Cloudflare dashboard → R2 → Create bucket `menupage`.
 2. Bucket → Settings → **Public access**: enable the `r2.dev` subdomain (or connect a custom domain) → that URL is `R2_PUBLIC_URL`.
 3. R2 → Manage API tokens → Create token with **Object Read & Write** on that bucket → `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`.
@@ -151,7 +158,8 @@ Owners enter a domain in **Settings → Custom domain** and get DNS instructions
 | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | **prod: this pair and/or Resend** | Google sign-in |
 | `AUTH_RESEND_KEY`, `EMAIL_FROM` | **prod: this pair and/or Google** | Email magic links. `EMAIL_FROM` must be on a domain verified in Resend |
 | `DEMO_LOGIN_ENABLED` | optional | `true` turns on the hidden judge demo at `/demo`. **Default off** (anything other than `true`) |
-| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL` | for uploads in prod | Image storage |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (or `CLOUDINARY_URL`) | for uploads in prod (Option A) | Image storage (Cloudinary) |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL` | for uploads in prod (Option B) | Image storage (Cloudflare R2) |
 | `DODO_PAYMENTS_API_KEY`, `DODO_PAYMENTS_WEBHOOK_SECRET`, `DODO_PAYMENTS_ENVIRONMENT`, `DODO_PRODUCT_PRO` | optional | Billing (disabled unless all set, plus `APP_URL`) |
 | `PRO_EMAILS` | optional | Comma-separated emails that get Pro for free (your freelance clients) |
 | `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID`, `CUSTOM_DOMAIN_TARGET` | optional | Automatic custom domains |

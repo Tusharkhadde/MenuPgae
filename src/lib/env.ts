@@ -31,6 +31,11 @@ const schema = z.object({
   R2_SECRET_ACCESS_KEY: optional,
   R2_BUCKET: optional,
   R2_PUBLIC_URL: optional,
+  // Cloudinary image storage (alternative to Cloudflare R2)
+  CLOUDINARY_URL: optional,
+  CLOUDINARY_CLOUD_NAME: optional,
+  CLOUDINARY_API_KEY: optional,
+  CLOUDINARY_API_SECRET: optional,
   VERCEL_API_TOKEN: optional,
   VERCEL_PROJECT_ID: optional,
   VERCEL_TEAM_ID: optional,
@@ -73,6 +78,10 @@ export function env(): Env {
   return cached;
 }
 
+export function _resetEnvCache(): void {
+  cached = null;
+}
+
 export const isProd = () => process.env.NODE_ENV === "production";
 
 /** Throw a clear error at runtime when a production deployment is missing a must-have. */
@@ -102,6 +111,10 @@ export const features = {
   r2: () => {
     const e = env();
     return !!(e.R2_ACCOUNT_ID && e.R2_ACCESS_KEY_ID && e.R2_SECRET_ACCESS_KEY && e.R2_BUCKET && e.R2_PUBLIC_URL);
+  },
+  cloudinary: () => {
+    const e = env();
+    return !!(e.CLOUDINARY_URL || (e.CLOUDINARY_CLOUD_NAME && e.CLOUDINARY_API_KEY && e.CLOUDINARY_API_SECRET));
   },
   vercelDomains: () => !!(env().VERCEL_API_TOKEN && env().VERCEL_PROJECT_ID),
   /** Transactional email (reservation alerts, team invites, weekly digest). Sign-in links use the same key. */

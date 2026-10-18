@@ -13,6 +13,12 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["*.trycloudflare.com", "*.ngrok-free.app", "*.ngrok.app"],
   // The embedded dev database is never bundled.
   serverExternalPackages: ["@electric-sql/pglite"],
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "res.cloudinary.com" },
+      { protocol: "https", hostname: "*.r2.dev" },
+    ],
+  },
   async headers() {
     return [
       // Everything except the embeddable menu may only be framed by ourselves.
