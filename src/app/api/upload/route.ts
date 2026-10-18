@@ -42,9 +42,18 @@ export async function POST(request: Request) {
   try {
     const url = await storeImage({ bytes, type: check.type, folder });
     return NextResponse.json({ url });
-  } catch (err) {
-    if (err instanceof StorageNotConfiguredError) return NextResponse.json({ error: err.message }, { status: 503 });
-    console.error("[menupage] upload failed", err);
-    return NextResponse.json({ error: "Upload failed. Please try again." }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Upload failed. Please try again.";
+    const isConfigError =
+      err instanceof StorageNotConfiguredError ||
+      (typeof err === "object" && err !== null && "name" in err && (err as { name?: string }).name === "StorageNotConfiguredError");
+
+    console.error("[menupage] upload failed:", err);
+
+    if (isConfigError) {
+      return NextResponse.json({ error: message }, { status: 503 });
+    }
+
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

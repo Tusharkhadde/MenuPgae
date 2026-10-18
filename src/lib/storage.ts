@@ -13,14 +13,21 @@ export class StorageNotConfiguredError extends Error {
       `Image uploads aren't configured for production. Missing: ${missing.join(", ")}. Add Cloudinary (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET) or Cloudflare R2 variables in Vercel → Settings → Environment Variables.`,
     );
     this.name = "StorageNotConfiguredError";
+    Object.setPrototypeOf(this, StorageNotConfiguredError.prototype);
   }
+}
+
+function cleanEnvString(val: string | undefined): string {
+  if (!val) return "";
+  return val.trim().replace(/^["']|["']$/g, "").trim();
 }
 
 export function getCloudinaryConfig(customEnv?: ReturnType<typeof env>): { cloudName: string; apiKey: string; apiSecret: string } | null {
   const e = customEnv ?? env();
-  if (e.CLOUDINARY_URL) {
+  const rawUrl = cleanEnvString(e.CLOUDINARY_URL);
+  if (rawUrl) {
     try {
-      const parsed = new URL(e.CLOUDINARY_URL);
+      const parsed = new URL(rawUrl);
       const apiKey = decodeURIComponent(parsed.username);
       const apiSecret = decodeURIComponent(parsed.password);
       const cloudName = parsed.hostname;
@@ -30,9 +37,9 @@ export function getCloudinaryConfig(customEnv?: ReturnType<typeof env>): { cloud
     }
   }
 
-  const cloudName = e.CLOUDINARY_CLOUD_NAME;
-  const apiKey = e.CLOUDINARY_API_KEY;
-  const apiSecret = e.CLOUDINARY_API_SECRET;
+  const cloudName = cleanEnvString(e.CLOUDINARY_CLOUD_NAME);
+  const apiKey = cleanEnvString(e.CLOUDINARY_API_KEY);
+  const apiSecret = cleanEnvString(e.CLOUDINARY_API_SECRET);
 
   if (cloudName && apiKey && apiSecret) {
     return { cloudName, apiKey, apiSecret };
@@ -50,8 +57,11 @@ export async function storeImage(opts: { bytes: Uint8Array; type: AllowedImageTy
     const stringToSign = `folder=${folder}&timestamp=${timestamp}${cloudinary.apiSecret}`;
     const signature = createHash("sha1").update(stringToSign).digest("hex");
 
+    const base64 = Buffer.from(opts.bytes).toString("base64");
+    const dataUri = `data:${opts.type};base64,${base64}`;
+
     const formData = new FormData();
-    formData.append("file", new Blob([opts.bytes as unknown as BlobPart], { type: opts.type }), `upload.${extensionFor(opts.type)}`);
+    formData.append("file", dataUri);
     formData.append("folder", folder);
     formData.append("timestamp", timestamp);
     formData.append("api_key", cloudinary.apiKey);
@@ -64,7 +74,8 @@ export async function storeImage(opts: { bytes: Uint8Array; type: AllowedImageTy
 
     if (!res.ok) {
       const err = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-      throw new Error(err?.error?.message ?? `Cloudinary upload failed with status ${res.status}`);
+      const detail = err?.error?.message ?? `Cloudinary upload failed with status ${res.status}`;
+      throw new Error(`Cloudinary: ${detail}`);
     }
 
     const data = (await res.json()) as { secure_url?: string; url?: string };
